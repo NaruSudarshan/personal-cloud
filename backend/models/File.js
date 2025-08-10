@@ -1,14 +1,38 @@
+// models/File.js
 const mongoose = require("mongoose");
 
-const fileSchema = new mongoose.Schema({
-  originalName: String,         // test.txt
-  savedName: String,            // 123456-test.txt
-  size: Number,
-  path: String,
-  version: Number,              // version number
+const versionSchema = new mongoose.Schema({
+  versionNumber: { type: Number, required: true },
+  savedName: { type: String, required: true },
+  size: { type: Number, required: true },
+  path: { type: String, required: true },
   uploadDate: { type: Date, default: Date.now },
+  fileHash: { type: String }
 });
 
-fileSchema.index({ originalName: 1, version: -1 }); // Index for faster lookups
+const fileSchema = new mongoose.Schema({
+  originalName: { type: String, required: true },
+  savedName: { type: String, required: true },
+  size: { type: Number, required: true },
+  mimeType: { type: String },
+  path: { type: String, required: true },
+  fileHash: { type: String },
+  
+  version: { type: Number, default: 1 },
+  versions: [versionSchema],
+
+  tags: [{ type: String }],
+  summary: { type: String },
+  extractedText: { type: String },
+
+  aiProcessed: { 
+    type: String, 
+    enum: ["pending", "processing", "ready", "error"], 
+    default: "pending" 
+  },
+
+  uploadedBy: { type: String, default: "root" },
+  uploadDate: { type: Date, default: Date.now }
+});
 
 module.exports = mongoose.model("File", fileSchema);
