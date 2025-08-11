@@ -19,7 +19,7 @@ const Upload = () => {
     formData.append("file", selectedFile);
 
     try {
-      const res = await fetch("http://localhost:5000/upload", {
+      const res = await fetch("http://localhost:5000/api/upload", {
         method: "POST",
         body: formData,
       });
