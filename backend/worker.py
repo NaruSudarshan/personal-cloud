@@ -1,85 +1,36 @@
-# worker.py
+# simple_worker.py
+
 import os
 import time
 from dotenv import load_dotenv
 from pymongo import MongoClient, ReturnDocument
 import fitz  # PyMuPDF
-from PIL import Image
-import pytesseract
-from sentence_transformers import SentenceTransformer
-from transformers import pipeline  # for summarization
+from sklearn.feature_extraction.text import TfidfVectorizer
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+# Load environment variables
 load_dotenv()
 
 MONGODB_URI = os.getenv("MONGODB_URI")
 DB_NAME = os.getenv("DB_NAME", "personal_cloud")
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
 
+# Setup MongoDB client and collections
 client = MongoClient(MONGODB_URI)
 db = client[DB_NAME]
 files_col = db["files"]
 emb_col = db["embeddings"]
 
-print("Loading embedding model (this may take a moment)...")
-embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-print("Embedding model loaded.")
+# Text splitter
+splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
 
-print("Loading summarization model (this may take a moment)...")
-summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
-print("Summarization model loaded.")
-
+# PDF text extraction
 def extract_text_from_pdf(path):
-    text_pages = []
     try:
         with fitz.open(path) as doc:
-            for page in doc:
-                text_pages.append(page.get_text())
+            return "\n".join([page.get_text() for page in doc])
     except Exception as e:
-        print("PDF extraction failed:", e)
-    return "\n".join(text_pages)
-
-def extract_text(file_doc):
-    path = file_doc.get("path")
-    if not path or not os.path.exists(path):
-        return ""
-
-    mime = (file_doc.get("mimeType") or "").lower()
-    lower = path.lower()
-
-    if mime == "text/plain" or lower.endswith(".txt"):
-        try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                return f.read()
-        except Exception as e:
-            print("Text read error:", e)
-            return ""
-
-    if "pdf" in mime or lower.endswith(".pdf"):
-        return extract_text_from_pdf(path)
-
-    if mime.startswith("image/") or any(lower.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp"]):
-        try:
-            img = Image.open(path)
-            return pytesseract.image_to_string(img)
-        except Exception as e:
-            print("Image OCR error:", e)
-            return ""
-
-    try:
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
-    except:
-        return ""
-
-def summarize_text(text):
-    if not text.strip():
-        return ""
-    short_text = text[:3000]  # keep within model limits
-    try:
-        summary = summarizer(short_text, max_length=130, min_length=30, do_sample=False)
-        return summary[0]['summary_text']
-    except Exception as e:
-        print("Summarization error:", e)
+        print("PDF extraction error:", e)
         return ""
 
 def process_one():
@@ -96,34 +47,39 @@ def process_one():
     print(f"Picked file: {doc.get('originalName')} (id={doc.get('_id')})")
 
     try:
-        full_text = extract_text(doc) or ""
-        short_text = full_text if len(full_text) < 100000 else full_text[:100000]
+        path = doc.get("path")
+        if not path or not os.path.exists(path):
+            raise Exception("File path invalid or missing")
 
-        embedding = embed_model.encode(short_text).tolist()
+        full_text = extract_text_from_pdf(path)
+        if not full_text.strip():
+            raise Exception("No text extracted from PDF")
 
-        emb_doc = {
-            "fileId": doc["_id"],
-            "versionNumber": doc.get("version", 1),
-            "vector": embedding,
-            "model": "all-MiniLM-L6-v2",
-            "createdAt": time.time()
-        }
-        emb_col.insert_one(emb_doc)
+        chunks = splitter.split_text(full_text)
 
-        preview_text = full_text[:1000] + ("..." if len(full_text) > 1000 else "")
+        vectorizer = TfidfVectorizer()
+        vectors = vectorizer.fit_transform(chunks).toarray()
 
-        summary = summarize_text(full_text)
+        for i, vector in enumerate(vectors):
+            emb_col.insert_one({
+                "fileId": doc["_id"],
+                "versionNumber": doc.get("version", 1),
+                "chunkIndex": i,
+                "chunkText": chunks[i],
+                "vector": vector.tolist(),
+                "model": "tf-idf",
+                "createdAt": time.time()
+            })
 
         files_col.update_one(
             {"_id": doc["_id"]},
             {"$set": {
-                "textPreview": preview_text,
-                "summary": summary,
-                "aiProcessed": "ready"
+                "aiProcessed": "ready",
+                "textPreview": full_text[:1000] + ("..." if len(full_text) > 1000 else "")
             }}
         )
 
-        print(f"Processed {doc.get('originalName')} — embedding + preview + summary saved.")
+        print(f"Processed {doc.get('originalName')} — TF-IDF vectors saved.")
     except Exception as e:
         print("Processing error:", e)
         files_col.update_one({"_id": doc["_id"]}, {"$set": {"aiProcessed": "error"}})
@@ -131,7 +87,7 @@ def process_one():
     return True
 
 if __name__ == "__main__":
-    print("AI Worker started — polling for pending files.")
+    print("Simple AI Worker started — polling for pending files.")
     try:
         while True:
             did = process_one()
