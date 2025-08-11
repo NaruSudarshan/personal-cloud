@@ -1,5 +1,5 @@
 // src/components/Layout.jsx
-import Sidebar from "./Sidebar";
+import Sidebar from "./SIdebar";
 import Topbar from "./Topbar";
 
 const Layout = ({ children }) => {

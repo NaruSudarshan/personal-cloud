@@ -17,6 +17,7 @@ const filesCol = db.collection("files");
 
 router.get('/', async (req, res) => {
   try {
+
     const query = req.query.q;
     if (!query) {
       return res.status(400).json({ error: "Missing query" });
@@ -75,6 +76,7 @@ router.get('/', async (req, res) => {
       { $limit: 5 } // << 3. Limit to the top 5 FINAL results
     ]).toArray();
 
+    console.log('querying')
     res.json(results);
 
   } catch (err) {
