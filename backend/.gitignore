@@ -1,7 +1,0 @@
-node_modules/
-.env
-uploads/
-npm-debug.log*
-.DS_Store
-*.log
-*venv
