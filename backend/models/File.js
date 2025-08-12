@@ -30,7 +30,6 @@ const fileSchema = new mongoose.Schema({
     enum: ["pending", "processing", "ready", "error"], 
     default: "pending" 
   },
-
   uploadedBy: { type: String, default: "root" },
   uploadDate: { type: Date, default: Date.now }
 });

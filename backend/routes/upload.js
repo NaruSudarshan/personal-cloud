@@ -5,6 +5,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const router = express.Router();
 const File = require("../models/File");
+const { processPDFForEmbeddings } = require('../services/embeddingProcessor');
 
 const uploadDir = path.join(__dirname, "../uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
@@ -55,6 +56,10 @@ router.post("/", upload.single("file"), async (req, res) => {
       existingFile.aiProcessed = "pending";
 
       await existingFile.save();
+      
+      if (mimetype === 'application/pdf') {
+        processPDFForEmbeddings(existingFile._id);
+      }
 
       return res.status(200).json({
         message: "New version uploaded successfully",

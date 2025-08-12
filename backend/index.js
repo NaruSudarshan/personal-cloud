@@ -30,14 +30,14 @@ mongoose.connect(process.env.MONGODB_URI)
 // --- Route Imports ---
 const filesRoute = require("./routes/files");
 const uploadRoute = require("./routes/upload");
-const searchRoute = require("./routes/search");
+const queryRoute = require('./routes/query');
 
 // --- API Route Definitions ---
 // Use the '/api' prefix for all backend routes. This is a standard practice
 // to avoid conflicts with frontend routes.
 app.use("/api/files", filesRoute); // ✅ Corrected Path
 app.use("/api/upload", uploadRoute);
-app.use("/api/search", searchRoute);
+app.use('/api/query', queryRoute);
 
 // --- Server Startup ---
 app.listen(PORT, () => {
