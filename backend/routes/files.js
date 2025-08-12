@@ -45,7 +45,7 @@ router.get("/versions/:name", async (req, res) => {
 
     // The current document represents the latest version
     const latestVersion = {
-      id: file._id, // The main document's ID
+      id: file._id,
       name: file.originalName,
       version: file.version,
       size: `${(file.size / 1024).toFixed(1)} KB`,
@@ -54,12 +54,12 @@ router.get("/versions/:name", async (req, res) => {
 
     // The 'versions' array holds the older versions
     const oldVersions = file.versions.map(v => ({
-      id: v._id, // The sub-document's ID
-      name: file.originalName, // Name is the same
+      id: v._id,
+      name: file.originalName,
       version: v.version,
       size: `${(v.size / 1024).toFixed(1)} KB`,
       uploadedAt: v.uploadDate.toISOString(),
-    })).sort((a, b) => b.version - a.version); // Sort descending
+    })).sort((a, b) => b.version - a.version);
 
     res.json([latestVersion, ...oldVersions]);
   } catch (err) {
@@ -72,7 +72,7 @@ router.get("/versions/:name", async (req, res) => {
 router.get("/download/:id", async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-        return res.status(400).json({ error: "Invalid ID format" });
+      return res.status(400).json({ error: "Invalid ID format" });
     }
 
     // First, check if the ID is for a main document (latest version)
@@ -83,7 +83,7 @@ router.get("/download/:id", async (req, res) => {
     if (!file) {
       file = await File.findOne({ "versions._id": req.params.id });
       if (file) {
-         versionData = file.versions.find(v => v._id.toString() === req.params.id);
+        versionData = file.versions.find(v => v._id.toString() === req.params.id);
       }
     }
 
@@ -106,69 +106,69 @@ router.get("/download/:id", async (req, res) => {
 
 // Delete a specific file version by its unique ID
 router.delete("/:id", async (req, res) => {
-    try {
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-            return res.status(400).json({ error: "Invalid ID format" });
-        }
-
-        const fileToDelete = await File.findById(req.params.id);
-
-        // CASE 1: The ID is for the LATEST version (the main document)
-        if (fileToDelete) {
-            // If there are no older versions, delete the whole document
-            if (fileToDelete.versions.length === 0) {
-                fs.unlinkSync(path.join(uploadDir, fileToDelete.savedName)); // Delete physical file
-                await File.deleteOne({ _id: fileToDelete._id });
-                return res.json({ message: `Deleted ${fileToDelete.originalName} completely.` });
-            }
-
-            // If there are older versions, promote the newest one
-            fileToDelete.versions.sort((a, b) => b.version - a.version); // Ensure sorted
-            const versionToPromote = fileToDelete.versions.shift(); // Get newest old version
-
-            // Delete the old latest version's physical file
-            fs.unlinkSync(path.join(uploadDir, fileToDelete.savedName));
-
-            // Update the main document with the promoted version's data
-            fileToDelete.savedName = versionToPromote.savedName;
-            fileToDelete.size = versionToPromote.size;
-            fileToDelete.mimeType = versionToPromote.mimeType;
-            fileToDelete.path = versionToPromote.path;
-            fileToDelete.fileHash = versionToPromote.fileHash;
-            fileToDelete.version = versionToPromote.version;
-            fileToDelete.uploadDate = versionToPromote.uploadDate;
-            // Reset AI processing status for the new content
-            fileToDelete.aiProcessed = "pending"; 
-            
-            await fileToDelete.save();
-
-            return res.json({ message: `Deleted latest version. Promoted v${versionToPromote.version} of ${fileToDelete.originalName}.` });
-        }
-
-        // CASE 2: The ID is for an OLDER version (a sub-document)
-        const parentFile = await File.findOne({ "versions._id": req.params.id });
-        if (parentFile) {
-            const versionToDelete = parentFile.versions.find(v => v._id.toString() === req.params.id);
-            if (!versionToDelete) return res.status(404).json({ error: "Version not found in parent" });
-            
-            // Delete the physical file
-            const filePath = path.join(uploadDir, versionToDelete.savedName);
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-
-            // Pull the version from the array in the DB
-            await File.updateOne(
-                { _id: parentFile._id },
-                { $pull: { versions: { _id: versionToDelete._id } } }
-            );
-
-            return res.json({ message: `Deleted version ${versionToDelete.version} of ${parentFile.originalName}` });
-        }
-
-        return res.status(404).json({ error: "File version not found" });
-    } catch (err) {
-        console.error("Delete error:", err);
-        res.status(500).json({ error: "Delete failed" });
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid ID format" });
     }
+
+    const fileToDelete = await File.findById(req.params.id);
+
+    // CASE 1: The ID is for the LATEST version (the main document)
+    if (fileToDelete) {
+      // If there are no older versions, delete the whole document
+      if (fileToDelete.versions.length === 0) {
+        fs.unlinkSync(path.join(uploadDir, fileToDelete.savedName)); // Delete physical file
+        await File.deleteOne({ _id: fileToDelete._id });
+        return res.json({ message: `Deleted ${fileToDelete.originalName} completely.` });
+      }
+
+      // If there are older versions, promote the newest one
+      fileToDelete.versions.sort((a, b) => b.version - a.version); // Ensure sorted
+      const versionToPromote = fileToDelete.versions.shift(); // Get newest old version
+
+      // Delete the old latest version's physical file
+      fs.unlinkSync(path.join(uploadDir, fileToDelete.savedName));
+
+      // Update the main document with the promoted version's data
+      fileToDelete.savedName = versionToPromote.savedName;
+      fileToDelete.size = versionToPromote.size;
+      fileToDelete.mimeType = versionToPromote.mimeType;
+      fileToDelete.path = versionToPromote.path;
+      fileToDelete.fileHash = versionToPromote.fileHash;
+      fileToDelete.version = versionToPromote.version;
+      fileToDelete.uploadDate = versionToPromote.uploadDate;
+      // Reset AI processing status for the new content
+      fileToDelete.aiProcessed = "pending";
+
+      await fileToDelete.save();
+
+      return res.json({ message: `Deleted latest version. Promoted v${versionToPromote.version} of ${fileToDelete.originalName}.` });
+    }
+
+    // CASE 2: The ID is for an OLDER version (a sub-document)
+    const parentFile = await File.findOne({ "versions._id": req.params.id });
+    if (parentFile) {
+      const versionToDelete = parentFile.versions.find(v => v._id.toString() === req.params.id);
+      if (!versionToDelete) return res.status(404).json({ error: "Version not found in parent" });
+
+      // Delete the physical file
+      const filePath = path.join(uploadDir, versionToDelete.savedName);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+      // Pull the version from the array in the DB
+      await File.updateOne(
+        { _id: parentFile._id },
+        { $pull: { versions: { _id: versionToDelete._id } } }
+      );
+
+      return res.json({ message: `Deleted version ${versionToDelete.version} of ${parentFile.originalName}` });
+    }
+
+    return res.status(404).json({ error: "File version not found" });
+  } catch (err) {
+    console.error("Delete error:", err);
+    res.status(500).json({ error: "Delete failed" });
+  }
 });
 
 

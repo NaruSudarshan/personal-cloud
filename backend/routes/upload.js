@@ -56,9 +56,10 @@ router.post("/", upload.single("file"), async (req, res) => {
       existingFile.aiProcessed = "pending";
 
       await existingFile.save();
-      
+
       if (mimetype === 'application/pdf') {
-        processPDFForEmbeddings(existingFile._id);
+        console.log(`🔍 Starting AI processing for PDF: ${filename}`);
+        processPDFForEmbeddings(existingFile._id); // Or newFile._id
       }
 
       return res.status(200).json({
@@ -89,6 +90,11 @@ router.post("/", upload.single("file"), async (req, res) => {
     });
 
     await newFile.save();
+    if (mimetype === 'application/pdf') {
+      console.log(`🔍 Starting AI processing for new PDF: ${filename}`);
+      processPDFForEmbeddings(newFile._id);
+    }
+
 
     res.status(201).json({
       message: "File uploaded successfully",

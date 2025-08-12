@@ -22,14 +22,12 @@ const fileSchema = new mongoose.Schema({
   versions: [versionSchema],
 
   tags: [{ type: String }],
-  summary: { type: String },
-  extractedText: { type: String },
-
   aiProcessed: { 
     type: String, 
     enum: ["pending", "processing", "ready", "error"], 
     default: "pending" 
   },
+  processingStartedAt: { type: Date },
   uploadedBy: { type: String, default: "root" },
   uploadDate: { type: Date, default: Date.now }
 });

@@ -6,10 +6,19 @@ const embeddingSchema = new mongoose.Schema({
     ref: "File", 
     required: true 
   },
-  chunkId: { type: String, required: true }, // Unique identifier for each chunk
-  chunkIndex: { type: Number, required: true }, // Position of chunk in document
-  vector: { type: [Number], required: true },
-  text: { type: String, required: true }, // Store chunk text
+  chunkId: { type: String, required: true }, 
+  chunkIndex: { type: Number, required: true },
+    vector: { 
+    type: [Number], 
+    required: true,
+    validate: {
+      validator: function(v) {
+        return v.length === 384;
+      },
+      message: props => `Vector must have 384 dimensions, got ${props.value.length}`
+    }
+  },
+  text: { type: String, required: true }, 
   model: { type: String, default: "all-MiniLM-L6-v2" },
   createdAt: { type: Date, default: Date.now }
 });
