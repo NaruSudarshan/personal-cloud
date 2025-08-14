@@ -1,22 +1,23 @@
 // src/components/Layout.jsx
 import Sidebar from "./Sidebar";
-import Topbar from "./Topbar";
+import ZenoAI from "./ZenoAI";
 
 const Layout = ({ children }) => {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-white">
-      {/* Topbar at the top */}
-      <Topbar />
+    <div className="h-screen bg-background text-white flex overflow-hidden">
+      {/* Sidebar */}
+      <Sidebar />
 
-      {/* Flex container for Sidebar + Page content */}
-      <div className="flex flex-1">
-        <Sidebar />
-
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col">
         {/* Page content */}
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 overflow-hidden">
           {children}
         </main>
       </div>
+
+      {/* Zeno AI Assistant */}
+      <ZenoAI />
     </div>
   );
 };

@@ -55,8 +55,8 @@ router.get("/versions/:name", async (req, res) => {
     // The 'versions' array holds the older versions
     const oldVersions = file.versions.map(v => ({
       id: v._id,
-      name: file.originalName,
-      version: v.version,
+      name: file.savedName,
+      version: v.versionNumber,
       size: `${(v.size / 1024).toFixed(1)} KB`,
       uploadedAt: v.uploadDate.toISOString(),
     })).sort((a, b) => b.version - a.version);

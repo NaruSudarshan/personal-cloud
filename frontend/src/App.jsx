@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Upload from "./pages/Upload";
 import Files from "./pages/Files";
@@ -11,16 +12,15 @@ function App() {
   return (
     <BrowserRouter>
       {isLoggedIn ? (
-        <div className="flex">
-          <div className="flex-1 p-6 bg-[#0f0f0f] min-h-screen text-white">
-            <Routes>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/upload" element={<Upload />} />
-              <Route path="/files" element={<Files />} />
-              <Route path="/users" element={<Users />} />
-            </Routes>
-          </div>
-        </div>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/upload" element={<Upload />} />
+            <Route path="/files" element={<Files />} />
+            <Route path="/users" element={<Users />} />
+          </Routes>
+        </Layout>
       ) : (
         <Routes>
           <Route path="/" element={<Login />} />
