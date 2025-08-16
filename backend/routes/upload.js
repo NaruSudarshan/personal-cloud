@@ -5,6 +5,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const router = express.Router();
 const File = require("../models/File");
+const { authenticateToken } = require("../middleware/auth");
 const { processPDFForEmbeddings } = require('../services/embeddingProcessor');
 
 const uploadDir = path.join(__dirname, "../uploads");
@@ -26,7 +27,7 @@ function calculateFileHash(filePath) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
-router.post("/", upload.single("file"), async (req, res) => {
+router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
   try {
     const { originalname, filename, size, mimetype, path: filePath } = req.file;
     const fileHash = calculateFileHash(filePath);
@@ -86,7 +87,7 @@ router.post("/", upload.single("file"), async (req, res) => {
       summary: "",
       extractedText: "",
       aiProcessed: "pending",
-      uploadedBy: "root"
+      uploadedBy: req.user.username
     });
 
     await newFile.save();

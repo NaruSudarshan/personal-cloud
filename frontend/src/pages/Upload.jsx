@@ -1,7 +1,9 @@
 import { useState, useRef } from "react";
+import { useAuth } from "../context/AuthContext";
 import { FaCloudUploadAlt, FaFileAlt, FaTimes, FaCheck, FaSpinner } from "react-icons/fa";
 
 const Upload = () => {
+  const { token } = useAuth();
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
@@ -47,19 +49,22 @@ const Upload = () => {
     try {
       const res = await fetch("http://localhost:5000/api/upload", {
         method: "POST",
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData,
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        setMessage(`✅ Successfully uploaded: ${data.originalname}`);
+        setMessage(`✅ Successfully uploaded: ${data.file.name}`);
         setSelectedFile(null);
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
       } else {
-        setMessage(`❌ Upload failed: ${data.message}`);
+        setMessage(`❌ Upload failed: ${data.error || data.message}`);
       }
     } catch (err) {
       console.error("Upload error:", err);

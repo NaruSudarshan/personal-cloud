@@ -1,42 +1,94 @@
-import { useState } from "react";
-import { v4 as uuidv4 } from "uuid";
+import { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
 import { FaUserPlus, FaTrashAlt, FaCopy, FaEye, FaEyeSlash, FaUsers, FaCalendarAlt, FaKey } from "react-icons/fa";
 
 const Users = () => {
+    const { token, API_BASE_URL } = useAuth();
     const [users, setUsers] = useState([]);
     const [username, setUsername] = useState("");
     const [expiryTime, setExpiryTime] = useState("");
     const [showPasswords, setShowPasswords] = useState({});
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const generatePassword = () => {
-        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-        let password = "";
-        for (let i = 0; i < 12; i++) {
-            password += chars.charAt(Math.floor(Math.random() * chars.length));
+    // Fetch users on component mount
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const fetchUsers = async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/users`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setUsers(data.users);
+            } else {
+                const errorData = await response.json();
+                setError(errorData.error || 'Failed to fetch users');
+            }
+        } catch (error) {
+            setError('Failed to fetch users');
         }
-        return password;
     };
 
-    const handleCreateUser = () => {
+    const handleCreateUser = async () => {
         if (!username || !expiryTime) return;
 
-        const newUser = {
-            id: uuidv4(),
-            username,
-            password: generatePassword(),
-            expiryTime,
-            createdAt: new Date().toISOString(),
-            status: "active"
-        };
+        setLoading(true);
+        setError("");
 
-        setUsers([...users, newUser]);
-        setUsername("");
-        setExpiryTime("");
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/users`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, expiryTime })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                setUsers([data.user, ...users]);
+                setUsername("");
+                setExpiryTime("");
+            } else {
+                setError(data.error || 'Failed to create user');
+            }
+        } catch (error) {
+            setError('Failed to create user');
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleDeleteUser = (id) => {
-        if (window.confirm("Are you sure you want to delete this user?")) {
-            setUsers(users.filter((user) => user.id !== id));
+    const handleDeleteUser = async (userId) => {
+        if (!window.confirm("Are you sure you want to delete this user?")) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/users/${userId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                setUsers(users.filter((user) => user.id !== userId));
+            } else {
+                const errorData = await response.json();
+                setError(errorData.error || 'Failed to delete user');
+            }
+        } catch (error) {
+            setError('Failed to delete user');
         }
     };
 
@@ -72,8 +124,14 @@ const Users = () => {
     };
 
     const getStatusColor = (user) => {
-        if (isExpired(user.expiryTime)) return "text-red-400 bg-red-900/20";
+        if (isExpired(user.expiryTime) || !user.isActive) return "text-red-400 bg-red-900/20";
         return "text-green-400 bg-green-900/20";
+    };
+
+    const getStatusText = (user) => {
+        if (!user.isActive) return "Inactive";
+        if (isExpired(user.expiryTime)) return "Expired";
+        return "Active";
     };
 
     return (
@@ -90,6 +148,13 @@ const Users = () => {
                     <span>{users.filter(u => !isExpired(u.expiryTime)).length} active</span>
                 </div>
             </div>
+
+            {/* Error Message */}
+            {error && (
+                <div className="bg-red-900/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg text-sm mb-6">
+                    {error}
+                </div>
+            )}
 
             {/* Create User Form */}
             <div className="bg-foreground rounded-xl border border-gray-800 p-6 mb-6">
@@ -128,11 +193,12 @@ const Users = () => {
 
                     <div className="flex items-end">
                         <button
-                            className="w-full px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center space-x-2"
+                            disabled={loading}
+                            className="w-full px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={handleCreateUser}
                         >
                             <FaUserPlus />
-                            <span>Create User</span>
+                            <span>{loading ? "Creating..." : "Create User"}</span>
                         </button>
                     </div>
                 </div>
@@ -222,7 +288,7 @@ const Users = () => {
                                         </td>
                                         <td className="p-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(user)}`}>
-                                                {isExpired(user.expiryTime) ? "Expired" : "Active"}
+                                                {getStatusText(user)}
                                             </span>
                                         </td>
                                         <td className="p-4">
@@ -235,13 +301,15 @@ const Users = () => {
                                             <span className="text-gray-400 text-sm">{formatDate(user.createdAt)}</span>
                                         </td>
                                         <td className="p-4 text-right">
-                                            <button
-                                                onClick={() => handleDeleteUser(user.id)}
-                                                className="p-2 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded-lg transition-colors"
-                                                title="Delete user"
-                                            >
-                                                <FaTrashAlt />
-                                            </button>
+                                            {user.role !== 'root' && (
+                                                <button
+                                                    onClick={() => handleDeleteUser(user.id)}
+                                                    className="p-2 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded-lg transition-colors"
+                                                    title="Delete user"
+                                                >
+                                                    <FaTrashAlt />
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

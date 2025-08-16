@@ -4,6 +4,7 @@ const { Groq } = require('groq-sdk');
 const { HuggingFaceTransformersEmbeddings } = require('@langchain/community/embeddings/hf_transformers');
 const File = require('../models/File');
 const Embedding = require('../models/Embedding');
+const { authenticateToken } = require('../middleware/auth');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -12,7 +13,7 @@ const embeddings = new HuggingFaceTransformersEmbeddings({
     modelName: 'Xenova/all-MiniLM-L6-v2',
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
     try {
         const { query } = req.body;
         console.log(`🔍 Received search query: "${query}"`);

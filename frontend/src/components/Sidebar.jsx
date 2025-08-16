@@ -1,8 +1,17 @@
 // src/components/Sidebar.jsx
 import { FaCloudUploadAlt, FaFolderOpen, FaUsers, FaHome, FaSearch, FaUser, FaSignOutAlt } from "react-icons/fa";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const Sidebar = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
   return (
     <div className="w-72 bg-foreground border-r border-gray-800 flex flex-col">
       {/* Logo/Brand Area */}
@@ -103,11 +112,14 @@ const Sidebar = () => {
               <FaUser className="text-white text-sm" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium text-white">John Doe</p>
-              <p className="text-xs text-gray-400">Administrator</p>
+              <p className="text-sm font-medium text-white">{user?.username || 'Guest'}</p>
+              <p className="text-xs text-gray-400">{user?.role === 'root' ? 'Administrator' : 'User'}</p>
             </div>
           </div>
-          <button className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+          >
             <FaSignOutAlt className="text-sm" />
             <span>Logout</span>
           </button>

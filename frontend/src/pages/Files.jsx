@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import { FaDownload, FaTrashAlt, FaRobot, FaSearch, FaFileAlt, FaClock, FaStar, FaFilter, FaSort } from "react-icons/fa";
 import axios from "axios";
 
 const MyFiles = () => {
+  const { token } = useAuth();
   const [files, setFiles] = useState([]);
   const [versionsMap, setVersionsMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -15,7 +17,12 @@ const MyFiles = () => {
   const fetchFiles = async () => {
     setLoading(true);
     try {
-      const res = await axios.get("http://localhost:5000/api/files");
+      const res = await axios.get("http://localhost:5000/api/files", {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       setFiles(res.data);
     } catch (err) {
       console.error("Error fetching files:", err);
@@ -33,7 +40,12 @@ const MyFiles = () => {
       });
     } else {
       try {
-        const res = await axios.get(`http://localhost:5000/api/files/versions/${fileName}`);
+        const res = await axios.get(`http://localhost:5000/api/files/versions/${fileName}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
         setVersionsMap((prev) => ({ ...prev, [fileName]: res.data }));
       } catch (err) {
         console.error("Error fetching versions:", err);
@@ -42,16 +54,33 @@ const MyFiles = () => {
   };
 
   const handleDownload = (fileId) => {
-    window.open(`http://localhost:5000/api/files/download/${fileId}`, "_blank");
+    const url = `http://localhost:5000/api/files/download/${fileId}`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', '');
+    link.setAttribute('target', '_blank');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleDelete = async (fileId, fileName) => {
     if (window.confirm("Are you sure you want to delete this version?")) {
       try {
-        await axios.delete(`http://localhost:5000/api/files/${fileId}`);
+        await axios.delete(`http://localhost:5000/api/files/${fileId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
         fetchFiles();
         if (versionsMap[fileName]) {
-          const res = await axios.get(`http://localhost:5000/api/files/versions/${fileName}`);
+          const res = await axios.get(`http://localhost:5000/api/files/versions/${fileName}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
           setVersionsMap((prev) => ({ ...prev, [fileName]: res.data }));
         }
       } catch (err) {
@@ -88,7 +117,12 @@ const MyFiles = () => {
     setShowSearchResults(true);
     
     try {
-      const res = await axios.post('http://localhost:5000/api/query', { query: searchQuery });
+      const res = await axios.post('http://localhost:5000/api/query', { query: searchQuery }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       setAiAnswer(res.data.answer);
       setSearchResults(res.data.sources);
     } catch (err) {
