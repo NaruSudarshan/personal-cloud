@@ -2,6 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const { authenticateToken, requireRoot, generateToken } = require('../middleware/auth');
 const router = express.Router();
+const mongoose = require('mongoose');
 
 // Login route
 router.post('/login', async (req, res) => {
@@ -12,29 +13,24 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Find user by username
     const user = await User.findOne({ username: username.toLowerCase() });
-    
+
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check if user can access (not expired and active)
     if (!user.canAccess()) {
       return res.status(403).json({ error: 'Account expired or inactive' });
     }
 
-    // Verify password
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Update last login
     user.lastLogin = new Date();
     await user.save();
 
-    // Generate JWT token
     const token = generateToken(user._id);
 
     res.json({
@@ -76,7 +72,9 @@ router.get('/me', authenticateToken, async (req, res) => {
 // Get all users (root only)
 router.get('/users', authenticateToken, requireRoot, async (req, res) => {
   try {
-    const users = await User.find({}, '-password').sort({ createdAt: -1 });
+    const users = await User.find({ role: { $ne: 'root' } }) // Exclude root users
+      .select('username password role expiryTime isActive createdAt')
+      .sort({ createdAt: -1 });
     res.json({ users });
   } catch (error) {
     console.error('Get users error:', error);
@@ -93,13 +91,11 @@ router.post('/users', authenticateToken, requireRoot, async (req, res) => {
       return res.status(400).json({ error: 'Username and expiry time are required' });
     }
 
-    // Check if username already exists
     const existingUser = await User.findOne({ username: username.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({ error: 'Username already exists' });
     }
 
-    // Generate random password
     const generatePassword = () => {
       const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
       let password = "";
@@ -111,21 +107,20 @@ router.post('/users', authenticateToken, requireRoot, async (req, res) => {
 
     const password = generatePassword();
 
-    // Create new user
     const newUser = new User({
       username: username.toLowerCase(),
       password,
       role: 'user',
-      expiryTime: new Date(expiryTime)
+      expiryTime: new Date(expiryTime),
+      isActive: true
     });
 
     await newUser.save();
 
-    // Return user without password hash
     const userResponse = {
-      id: newUser._id,
+      _id: newUser._id,
       username: newUser.username,
-      password: password, // Return plain password for admin to share
+      password: password,
       role: newUser.role,
       expiryTime: newUser.expiryTime,
       isActive: newUser.isActive,
@@ -147,7 +142,10 @@ router.delete('/users/:userId', authenticateToken, requireRoot, async (req, res)
   try {
     const { userId } = req.params;
 
-    // Prevent deleting root user
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'Invalid user ID format' });
+    }
+
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -161,7 +159,7 @@ router.delete('/users/:userId', authenticateToken, requireRoot, async (req, res)
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
-    console.error('Delete user error:', error);
+    console.error('Delete user error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -177,7 +175,6 @@ router.put('/users/:userId', authenticateToken, requireRoot, async (req, res) =>
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Prevent modifying root user
     if (user.role === 'root') {
       return res.status(403).json({ error: 'Cannot modify root user' });
     }
@@ -189,7 +186,7 @@ router.put('/users/:userId', authenticateToken, requireRoot, async (req, res) =>
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       updateData,
-      { new: true, select: '-password' }
+      { new: true }
     );
 
     res.json({
@@ -203,4 +200,3 @@ router.put('/users/:userId', authenticateToken, requireRoot, async (req, res) =>
 });
 
 module.exports = router;
-

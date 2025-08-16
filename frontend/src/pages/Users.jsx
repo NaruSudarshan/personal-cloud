@@ -11,7 +11,6 @@ const Users = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
-    // Fetch users on component mount
     useEffect(() => {
         fetchUsers();
     }, []);
@@ -27,7 +26,8 @@ const Users = () => {
 
             if (response.ok) {
                 const data = await response.json();
-                setUsers(data.users);
+                // Filter out root users and set the users directly
+                setUsers(data.users.filter(user => user.role !== 'root'));
             } else {
                 const errorData = await response.json();
                 setError(errorData.error || 'Failed to fetch users');
@@ -70,6 +70,11 @@ const Users = () => {
     };
 
     const handleDeleteUser = async (userId) => {
+        if (!userId) {
+            setError("Invalid user ID");
+            return;
+        }
+
         if (!window.confirm("Are you sure you want to delete this user?")) return;
 
         try {
@@ -82,7 +87,7 @@ const Users = () => {
             });
 
             if (response.ok) {
-                setUsers(users.filter((user) => user.id !== userId));
+                setUsers(users.filter((user) => user._id !== userId));
             } else {
                 const errorData = await response.json();
                 setError(errorData.error || 'Failed to delete user');
@@ -95,7 +100,6 @@ const Users = () => {
     const handleCopyPassword = async (password) => {
         try {
             await navigator.clipboard.writeText(password);
-            // You could add a toast notification here
         } catch (err) {
             console.error("Failed to copy password:", err);
         }
@@ -124,7 +128,8 @@ const Users = () => {
     };
 
     const getStatusColor = (user) => {
-        if (isExpired(user.expiryTime) || !user.isActive) return "text-red-400 bg-red-900/20";
+        if (isExpired(user.expiryTime)) return "text-red-400 bg-red-900/20";
+        if (!user.isActive) return "text-yellow-400 bg-yellow-900/20";
         return "text-green-400 bg-green-900/20";
     };
 
@@ -145,7 +150,7 @@ const Users = () => {
                 <div className="flex items-center space-x-2 text-sm text-gray-400">
                     <span>{users.length} users</span>
                     <span>•</span>
-                    <span>{users.filter(u => !isExpired(u.expiryTime)).length} active</span>
+                    <span>{users.filter(u => u.isActive && !isExpired(u.expiryTime)).length} active</span>
                 </div>
             </div>
 
@@ -223,7 +228,7 @@ const Users = () => {
                             <button
                                 onClick={() => {
                                     const allVisible = {};
-                                    users.forEach(user => allVisible[user.id] = true);
+                                    users.forEach(user => allVisible[user._id] = true);
                                     setShowPasswords(allVisible);
                                 }}
                                 className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
@@ -249,7 +254,7 @@ const Users = () => {
                             </thead>
                             <tbody>
                                 {users.map((user) => (
-                                    <tr key={user.id} className="border-b border-gray-800 hover:bg-gray-800 transition-colors">
+                                    <tr key={user._id} className="border-b border-gray-800 hover:bg-gray-800 transition-colors">
                                         <td className="p-4">
                                             <div className="flex items-center space-x-3">
                                                 <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center">
@@ -257,7 +262,7 @@ const Users = () => {
                                                 </div>
                                                 <div>
                                                     <p className="text-white font-medium">{user.username}</p>
-                                                    <p className="text-sm text-gray-400">User Account</p>
+                                                    <p className="text-sm text-gray-400">{user.role}</p>
                                                 </div>
                                             </div>
                                         </td>
@@ -265,16 +270,16 @@ const Users = () => {
                                             <div className="flex items-center space-x-2">
                                                 <div className="relative">
                                                     <input
-                                                        type={showPasswords[user.id] ? "text" : "password"}
+                                                        type={showPasswords[user._id] ? "text" : "password"}
                                                         value={user.password}
                                                         readOnly
-                                                        className="bg-gray-800 text-white font-mono px-3 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
+                                                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white font-mono focus:outline-none focus:ring-2 focus:ring-primary"
                                                     />
                                                     <button
-                                                        onClick={() => togglePasswordVisibility(user.id)}
+                                                        onClick={() => togglePasswordVisibility(user._id)}
                                                         className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
                                                     >
-                                                        {showPasswords[user.id] ? <FaEyeSlash /> : <FaEye />}
+                                                        {showPasswords[user._id] ? <FaEyeSlash /> : <FaEye />}
                                                     </button>
                                                 </div>
                                                 <button
@@ -303,7 +308,7 @@ const Users = () => {
                                         <td className="p-4 text-right">
                                             {user.role !== 'root' && (
                                                 <button
-                                                    onClick={() => handleDeleteUser(user.id)}
+                                                    onClick={() => handleDeleteUser(user._id)}
                                                     className="p-2 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded-lg transition-colors"
                                                     title="Delete user"
                                                 >
@@ -348,7 +353,9 @@ const Users = () => {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-gray-400">Active Users</p>
-                            <p className="text-2xl font-bold text-white">{users.filter(u => !isExpired(u.expiryTime)).length}</p>
+                            <p className="text-2xl font-bold text-white">
+                                {users.filter(u => u.isActive && !isExpired(u.expiryTime)).length}
+                            </p>
                         </div>
                         <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
                             <FaKey className="text-white text-xl" />
@@ -360,7 +367,9 @@ const Users = () => {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-gray-400">Expired Users</p>
-                            <p className="text-2xl font-bold text-white">{users.filter(u => isExpired(u.expiryTime)).length}</p>
+                            <p className="text-2xl font-bold text-white">
+                                {users.filter(u => isExpired(u.expiryTime)).length}
+                            </p>
                         </div>
                         <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center">
                             <FaCalendarAlt className="text-white text-xl" />
