@@ -4,6 +4,7 @@ const { Groq } = require('groq-sdk');
 const { HuggingFaceTransformersEmbeddings } = require('@langchain/community/embeddings/hf_transformers');
 const File = require('../models/File');
 const Embedding = require('../models/Embedding');
+const { authenticateToken } = require('../middleware/auth');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -12,7 +13,7 @@ const embeddings = new HuggingFaceTransformersEmbeddings({
     modelName: 'Xenova/all-MiniLM-L6-v2',
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
     try {
         const { query } = req.body;
         console.log(`🔍 Received search query: "${query}"`);
@@ -58,16 +59,23 @@ router.post('/', async (req, res) => {
         // Prepare context for LLM
         const context = relevantChunks.map(chunk => {
             const file = fileMap.get(chunk.fileId.toString());
-            return `[SOURCE: ${file.originalName} v${file.version}]\n` +
-                `Chunk ${chunk.chunkIndex + 1}:\n${chunk.text.slice(0, 500)}...`;
+            return `[SOURCE: ${file.originalName} v${file.version}]\n${chunk.text.slice(0, 500)}...`;
         }).join('\n\n');
 
         // Query Groq with context
         const chatCompletion = await groq.chat.completions.create({
             messages: [{
                 role: "system",
-                content: `Answer user's question using ONLY context below. ` +
-                    `If unsure, say "I don't know".\n\nCONTEXT:\n${context}`
+                content: `You are a helpful AI assistant. Answer the user's question using ONLY the context below. 
+
+CRITICAL RULES:
+1. NEVER mention chunk numbers, chunk references, or chunk divisions in your response
+2. Provide clean, natural summaries without any chunk terminology
+3. If unsure, say "I don't know"
+4. Focus on the content and topics, not how the information is organized
+
+CONTEXT:
+${context}`
             }, {
                 role: "user",
                 content: query
@@ -77,20 +85,27 @@ router.post('/', async (req, res) => {
             max_tokens: 1024
         });
 
-        // Prepare response with sources
+        // Prepare response with unique sources by file name
+        const seenNames = new Set();
+        const uniqueSources = [];
+        for (const chunk of relevantChunks) {
+            const file = fileMap.get(chunk.fileId.toString());
+            if (!file) continue;
+            if (seenNames.has(file.originalName)) continue;
+            seenNames.add(file.originalName);
+            uniqueSources.push({
+                fileId: file._id,
+                chunkId: chunk.chunkId,
+                name: file.originalName,
+                version: file.version,
+                score: chunk.score,
+                textPreview: chunk.text.slice(0, 200) + '...'
+            });
+        }
+
         const response = {
             answer: chatCompletion.choices[0]?.message?.content || "No answer generated",
-            sources: relevantChunks.map(chunk => {
-                const file = fileMap.get(chunk.fileId.toString());
-                return {
-                    fileId: file._id,
-                    chunkId: chunk.chunkId,
-                    name: file.originalName,
-                    version: file.version,
-                    score: chunk.score,
-                    textPreview: chunk.text.slice(0, 200) + '...'
-                }
-            })
+            sources: uniqueSources
         };
         console.log(`🧠 Generated answer: ${response.answer.substring(0, 100)}...`);
 
