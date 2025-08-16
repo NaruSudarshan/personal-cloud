@@ -4,3 +4,4 @@ uploads/
 npm-debug.log*
 .DS_Store
 *.log
+scripts/

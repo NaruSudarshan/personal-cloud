@@ -6,13 +6,12 @@ const path = require("path");
 const router = express.Router();
 const mongoose = require("mongoose");
 const File = require("../models/File"); // Your new File model
-const { CLIENT_RENEG_WINDOW } = require("tls");
-const { log } = require("console");
+const { authenticateToken } = require("../middleware/auth");
 
 const uploadDir = path.join(__dirname, "../uploads");
 
 // Get the latest version of each file
-router.get("/", async (req, res) => {
+router.get("/", authenticateToken, async (req, res) => {
   try {
     // With the new schema, each document IS the latest version. No aggregation needed.
     const latestFiles = await File.find({}).sort({ uploadDate: -1 });
@@ -35,7 +34,7 @@ router.get("/", async (req, res) => {
 });
 
 // Get all versions of a specific file
-router.get("/versions/:name", async (req, res) => {
+router.get("/versions/:name", authenticateToken, async (req, res) => {
   try {
     const file = await File.findOne({ originalName: req.params.name });
 
@@ -55,8 +54,8 @@ router.get("/versions/:name", async (req, res) => {
     // The 'versions' array holds the older versions
     const oldVersions = file.versions.map(v => ({
       id: v._id,
-      name: file.originalName,
-      version: v.version,
+      name: file.savedName,
+      version: v.versionNumber,
       size: `${(v.size / 1024).toFixed(1)} KB`,
       uploadedAt: v.uploadDate.toISOString(),
     })).sort((a, b) => b.version - a.version);
@@ -69,7 +68,7 @@ router.get("/versions/:name", async (req, res) => {
 });
 
 // Download a specific file version by its unique ID
-router.get("/download/:id", async (req, res) => {
+router.get("/download/:id", authenticateToken, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ error: "Invalid ID format" });
@@ -105,7 +104,7 @@ router.get("/download/:id", async (req, res) => {
 
 
 // Delete a specific file version by its unique ID
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticateToken, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ error: "Invalid ID format" });
