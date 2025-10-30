@@ -24,6 +24,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // --- Database Connection ---
 mongoose.connect(process.env.MONGODB_URI)
+// remove if email index doesnt exist
   .then(async () => {
     console.log("✅ MongoDB connected successfully.");
     try {
