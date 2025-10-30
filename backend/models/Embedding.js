@@ -6,6 +6,7 @@ const embeddingSchema = new mongoose.Schema({
     ref: "File", 
     required: true 
   },
+  versionNumber: { type: Number, required: true },
   chunkId: { type: String, required: true }, 
   chunkIndex: { type: Number, required: true },
     vector: { 
