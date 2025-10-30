@@ -23,6 +23,7 @@ router.get("/", authenticateToken, async (req, res) => {
       uploadedAt: file.uploadDate.toISOString(),
       version: file.version,
       uploadedBy: file.uploadedBy, // Example of adding new data
+      aiProcessed: file.aiProcessed || 'pending'
     }));
 
     res.json(fileData);

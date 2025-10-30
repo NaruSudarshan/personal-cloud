@@ -13,6 +13,7 @@ const MyFiles = () => {
   const [searching, setSearching] = useState(false);
   const [aiAnswer, setAiAnswer] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [summarizingId, setSummarizingId] = useState(null);
 
   const fetchFiles = async () => {
     setLoading(true);
@@ -131,6 +132,28 @@ const MyFiles = () => {
       setSearchResults([]);
     } finally {
       setSearching(false);
+    }
+  };
+
+  const handleSummarize = async (fileName, fileId) => {
+    // Only allow summarize if AI processing is ready (frontend disables button otherwise)
+    setSummarizingId(fileId || fileName);
+    setAiAnswer("");
+    setSearchResults([]);
+    setShowSearchResults(true);
+    try {
+      const res = await axios.post('http://localhost:5000/api/query/summarize', { fileName }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      setAiAnswer(res.data.summary || 'No summary generated');
+    } catch (err) {
+      console.error('Summarize error:', err);
+      setAiAnswer('❌ Failed to generate summary.');
+    } finally {
+      setSummarizingId(null);
     }
   };
 
@@ -336,6 +359,18 @@ const MyFiles = () => {
                             onClick={() => fetchVersions(file.name)}
                           >
                             {showVersions ? "Hide" : "Versions"}
+                          </button>
+                          <button
+                            title="Summarize"
+                            className={`p-1.5 text-blue-400 hover:text-blue-300 hover:bg-gray-700 rounded transition-colors ${file.aiProcessed !== 'ready' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            onClick={() => handleSummarize(file.name, file.id)}
+                            disabled={file.aiProcessed !== 'ready' || summarizingId === file.id}
+                          >
+                            {summarizingId === file.id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                              <FaRobot className="text-sm" />
+                            )}
                           </button>
                           <button 
                             className="p-1.5 text-green-400 hover:text-green-300 hover:bg-gray-700 rounded transition-colors"

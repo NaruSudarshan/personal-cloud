@@ -24,7 +24,19 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // --- Database Connection ---
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log("✅ MongoDB connected successfully."))
+  .then(async () => {
+    console.log("✅ MongoDB connected successfully.");
+    try {
+      await mongoose.connection.db.collection('users').dropIndex('email_1');
+      console.log('ℹ️ Dropped legacy email index on users collection.');
+    } catch (err) {
+      const safeCodes = ['IndexNotFound', 'NamespaceNotFound'];
+      const safeNumericCodes = [26, 27]; // ns not found, index not found
+      if (!safeCodes.includes(err.codeName) && !safeNumericCodes.includes(err.code)) {
+        console.warn('⚠️ Could not drop legacy email index:', err.message);
+      }
+    }
+  })
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
 // --- Route Imports ---

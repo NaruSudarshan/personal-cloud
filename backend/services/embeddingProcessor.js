@@ -26,6 +26,14 @@ async function processPDFForEmbeddings(fileId) {
       return;
     }
     console.log("File found:", !!file);
+    // mark processing started
+    try {
+      file.aiProcessed = 'processing';
+      file.processingStartedAt = new Date();
+      await file.save();
+    } catch (e) {
+      console.warn('Could not update file processing status:', e);
+    }
 
     // PDFLoader expects a local path. If file.path points to an S3 key, download it to uploads/ and use that path.
     const uploadsDir = path.join(__dirname, '../uploads');
@@ -76,19 +84,29 @@ async function processPDFForEmbeddings(fileId) {
     console.log("Generated vectors:", chunkVectors.length);
     console.log("Vector dimension:", chunkVectors[0]?.length || 0);
     // Save each chunk embedding to the database (include versionNumber)
-    const embeddingPromises = chunks.map((chunk, index) => {
-      return new Embedding({
-        fileId,
-        versionNumber: file.version,
-        chunkId: `${fileId}_${index}`,
-        chunkIndex: index,
-        vector: chunkVectors[index],
-        text: chunk.pageContent
-      }).save();
-    });
+    const embeddingDocs = chunks.map((chunk, index) => ({
+      fileId,
+      versionNumber: file.version,
+      chunkId: `${fileId}_${index}`,
+      chunkIndex: index,
+      vector: chunkVectors[index],
+      text: chunk.pageContent
+    }));
 
-    await Promise.all(embeddingPromises);
-    console.log(`💾 Saved ${embeddingPromises.length} embeddings to database`);
+    console.log(`💾 Saving ${embeddingDocs.length} embeddings for file '${file.originalName}' (id=${fileId}, version=${file.version})`);
+    // Use allSettled so we can log per-item failures without aborting the whole process
+    const savePromises = embeddingDocs.map(d => new Embedding(d).save());
+    const results = await Promise.allSettled(savePromises);
+    const successCount = results.filter(r => r.status === 'fulfilled').length;
+    const failureDetails = results
+      .map((r, idx) => ({ r, idx }))
+      .filter(x => x.r.status === 'rejected')
+      .map(x => ({ index: x.idx, reason: x.r.reason && x.r.reason.message ? x.r.reason.message : String(x.r.reason) }));
+
+    console.log(`💾 Embeddings save complete: ${successCount}/${results.length} succeeded`);
+    if (failureDetails.length > 0) {
+      console.error('❌ Some embeddings failed to save:', failureDetails.slice(0, 10));
+    }
 
     // Update file status
     file.aiProcessed = "ready";

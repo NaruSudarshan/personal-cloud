@@ -5,115 +5,185 @@ const { HuggingFaceTransformersEmbeddings } = require('@langchain/community/embe
 const File = require('../models/File');
 const Embedding = require('../models/Embedding');
 const { authenticateToken } = require('../middleware/auth');
-const dotenv = require('dotenv');
-dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const embeddings = new HuggingFaceTransformersEmbeddings({
     modelName: 'Xenova/all-MiniLM-L6-v2',
 });
 
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
+// Simplified vector math
+const cosine = (a, b) => {
+    const dot = a.reduce((sum, val, i) => sum + val * b[i], 0);
+    const normA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+    const normB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+    return normA && normB ? dot / (normA * normB) : 0;
+};
+
+// Simplified KNN
+const localKNN = async (queryVector, fileIds, k = 10) => {
+    const candidates = await Embedding.find({ fileId: { $in: fileIds } }).lean();
+    return candidates
+        .map(c => ({ ...c, score: cosine(queryVector, c.vector) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, k);
+};
+
+// Simplified Groq call without complex fallback
+const groqChat = async (messages, temperature = 0.3) => {
+    return await groq.chat.completions.create({
+        messages,
+        model: GROQ_MODEL,
+        temperature,
+        max_tokens: 1024
+    });
+};
+
+// Common function to get file map
+const getFileMap = async (fileIds) => {
+    const files = await File.find({ _id: { $in: fileIds } });
+    return new Map(files.map(f => [f._id.toString(), f]));
+};
+
+// Main query endpoint
 router.post('/', authenticateToken, async (req, res) => {
     try {
         const { query } = req.body;
-        console.log(`🔍 Received search query: "${query}"`);
         if (!query) return res.status(400).json({ error: 'Query is required' });
 
-        // Generate query embedding
         const queryVector = await embeddings.embedQuery(query);
+        
+        // Get relevant chunks scoped to user's files
+        const relevantChunks = await getRelevantChunks(query, queryVector, req.user.username);
+        if (!relevantChunks.length) {
+            return res.json({
+                answer: "I couldn't find any information related to your question in your uploaded files.",
+                sources: []
+            });
+        }
 
-        // Find most relevant chunks using Atlas Vector Search
-        const relevantChunks = await Embedding.aggregate([
-            {
-                $search: {
-                    index: "vectorSearch",
-                    knnBeta: {
-                        vector: queryVector,
-                        k: 10,
-                        path: "vector",
-                        filter: {
-                            text: {
-                                query: query,
-                                path: "text"
-                            }
-                        }
-                    }
-                }
-            },
-            {
-                $project: {
-                    score: { $meta: "searchScore" },
-                    fileId: 1,
-                    chunkId: 1,
-                    chunkIndex: 1,
-                    text: 1
-                }
-            }
-        ]);
-        console.log(`📊 Found ${relevantChunks.length} relevant chunks`);
-        // Get unique files from top chunks
-        const fileIds = [...new Set(relevantChunks.map(c => c.fileId))];
-        const files = await File.find({ _id: { $in: fileIds } });
-        const fileMap = new Map(files.map(f => [f._id.toString(), f]));
+        const fileMap = await getFileMap([...new Set(relevantChunks.map(c => c.fileId))]);
 
-        // Prepare context for LLM
+        // Generate answer
         const context = relevantChunks.map(chunk => {
             const file = fileMap.get(chunk.fileId.toString());
             return `[SOURCE: ${file.originalName} v${file.version}]\n${chunk.text.slice(0, 500)}...`;
         }).join('\n\n');
 
-        // Query Groq with context
-        const chatCompletion = await groq.chat.completions.create({
-            messages: [{
-                role: "system",
-                content: `You are a helpful AI assistant. Answer the user's question using ONLY the context below. 
-
-CRITICAL RULES:
-1. NEVER mention chunk numbers, chunk references, or chunk divisions in your response
-2. Provide clean, natural summaries without any chunk terminology
-3. If unsure, say "I don't know"
-4. Focus on the content and topics, not how the information is organized
+        const chatCompletion = await groqChat([{
+            role: "system",
+            content: `Use ONLY the context below. Never mention chunks or internal structure. If unsure, say "I don't know".
 
 CONTEXT:
 ${context}`
-            }, {
-                role: "user",
-                content: query
-            }],
-            model: "llama3-70b-8192",
-            temperature: 0.3,
-            max_tokens: 1024
-        });
+        }, {
+            role: "user",
+            content: query
+        }]);
 
-        // Prepare response with unique sources by file name
+        // Prepare response
         const seenNames = new Set();
-        const uniqueSources = [];
-        for (const chunk of relevantChunks) {
+        const uniqueSources = relevantChunks.reduce((sources, chunk) => {
             const file = fileMap.get(chunk.fileId.toString());
-            if (!file) continue;
-            if (seenNames.has(file.originalName)) continue;
-            seenNames.add(file.originalName);
-            uniqueSources.push({
-                fileId: file._id,
-                chunkId: chunk.chunkId,
-                name: file.originalName,
-                version: file.version,
-                score: chunk.score,
-                textPreview: chunk.text.slice(0, 200) + '...'
-            });
-        }
+            if (file && !seenNames.has(file.originalName)) {
+                seenNames.add(file.originalName);
+                sources.push({
+                    fileId: file._id,
+                    name: file.originalName,
+                    version: file.version,
+                    score: chunk.score,
+                    textPreview: chunk.text.slice(0, 200) + '...'
+                });
+            }
+            return sources;
+        }, []);
 
-        const response = {
+        res.json({
             answer: chatCompletion.choices[0]?.message?.content || "No answer generated",
             sources: uniqueSources
-        };
-        console.log(`🧠 Generated answer: ${response.answer.substring(0, 100)}...`);
+        });
 
-        res.json(response);
     } catch (error) {
         console.error('Query error:', error);
         res.status(500).json({ error: 'Query processing failed' });
     }
 });
+
+// Summarize endpoint
+router.post('/summarize', authenticateToken, async (req, res) => {
+    try {
+        const { fileName, fileId } = req.body;
+        if (!fileName && !fileId) return res.status(400).json({ error: 'fileName or fileId is required' });
+
+        const file = await File.findOne({
+            ...(fileId ? { _id: fileId } : { originalName: fileName }),
+            uploadedBy: req.user.username
+        });
+        if (!file) return res.status(404).json({ error: 'File not found' });
+
+        const queryVector = await embeddings.embedQuery('Summarize the document');
+        const fileEmbeds = await Embedding.find({ fileId: file._id }).lean();
+        if (!fileEmbeds.length) return res.status(404).json({ error: 'No embeddings found' });
+
+        // Get top chunks for summary
+        const topChunks = fileEmbeds
+            .map(c => ({ ...c, score: cosine(queryVector, c.vector) }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 12);
+
+        const context = topChunks.map(chunk => 
+            `[SOURCE: ${file.originalName} v${file.version}]\n${chunk.text.slice(0, 1000)}`
+        ).join('\n\n');
+
+        const chatCompletion = await groqChat([{
+            role: 'system',
+            content: `Summarize the document below. If unsure, say "I don't know".\n\nCONTEXT:\n${context}`
+        }, { 
+            role: 'user', 
+            content: `Please provide a concise summary of: ${file.originalName}` 
+        }], 0.2);
+
+        res.json({ 
+            summary: chatCompletion.choices[0]?.message?.content || 'No summary generated',
+            file: { id: file._id, name: file.originalName, version: file.version }
+        });
+
+    } catch (err) {
+        console.error('Summarize error:', err);
+        res.status(500).json({ error: 'Summarization failed' });
+    }
+});
+
+// Helper function for chunk retrieval
+async function getRelevantChunks(query, queryVector, username) {
+    const userFiles = await File.find({ uploadedBy: username }).select('_id');
+    if (!userFiles.length) return [];
+    const fileIds = userFiles.map(f => f._id);
+
+    try {
+        const results = await Embedding.aggregate([
+            {
+                $search: {
+                    index: "vectorSearch",
+                    knnBeta: {
+                        vector: queryVector,
+                        k: 20,
+                        path: "vector"
+                    }
+                }
+            },
+            { $match: { fileId: { $in: fileIds } } },
+            { $limit: 20 },
+            { $project: { score: { $meta: "searchScore" }, fileId: 1, text: 1 } }
+        ]);
+        if (results.length) return results;
+    } catch (err) {
+        console.warn('Atlas search failed, using local KNN:', err.message);
+    }
+
+    const knnResults = await localKNN(queryVector, fileIds, 20);
+    return knnResults.map(k => ({ score: k.score, fileId: k.fileId, text: k.text }));
+}
 
 module.exports = router;

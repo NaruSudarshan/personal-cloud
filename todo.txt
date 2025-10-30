@@ -1,1 +1,5 @@
 1. Add a storage limit for each user
+2. update pie chart in dashboard to show storage usage
+3. disable delete button for users without delete permission
+4. fix sort and delete filter
+5. user sign in and register
