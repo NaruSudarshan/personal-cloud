@@ -4,6 +4,7 @@ import { FaUserPlus, FaTrashAlt, FaCopy, FaEye, FaEyeSlash, FaUsers, FaCalendarA
 
 const Users = () => {
     const { token, API_BASE_URL } = useAuth();
+    const UNDER_CONSTRUCTION = true;
     const [users, setUsers] = useState([]);
     const [username, setUsername] = useState("");
     const [expiryTime, setExpiryTime] = useState("");
@@ -140,7 +141,15 @@ const Users = () => {
     };
 
     return (
-        <div className="h-full flex flex-col p-6">
+        <div className="relative h-full flex flex-col p-6">
+            {UNDER_CONSTRUCTION && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/30 backdrop-blur-[1px] text-center text-white px-6">
+                    <h2 className="text-3xl font-semibold mb-2">User Management</h2>
+                    <p className="text-gray-200 max-w-md">This page is currently under development. Existing content is temporarily unavailable.</p>
+                </div>
+            )}
+
+            <div className={`h-full flex flex-col ${UNDER_CONSTRUCTION ? 'pointer-events-none select-none blur-[0.5px]' : ''}`}>
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div>
@@ -376,6 +385,7 @@ const Users = () => {
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     );
