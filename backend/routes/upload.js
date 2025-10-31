@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const router = express.Router();
 const File = require("../models/File");
 const { authenticateToken } = require("../middleware/auth");
+const { ensureRootOwnerForGroup, getRootOwnerObjectId } = require('../utils/rootOwnership');
 const { processPDFForEmbeddings } = require('../services/embeddingProcessor');
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
@@ -27,6 +28,13 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
     const { originalname, size, mimetype, buffer } = req.file;
     const fileHash = calculateFileHashFromBuffer(buffer);
 
+    const ownerObjectId = getRootOwnerObjectId(req);
+    if (!ownerObjectId) {
+      return res.status(403).json({ error: 'Unable to resolve root owner for upload' });
+    }
+
+    await ensureRootOwnerForGroup(ownerObjectId);
+
     // S3 key: user prefix + timestamp + original name
     const savedName = `${Date.now()}-${originalname}`;
     const key = `${req.user.username}/${savedName}`;
@@ -42,7 +50,7 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
     }));
 
     // Check if file already exists in DB by original name
-    let existingFile = await File.findOne({ originalName: originalname });
+  let existingFile = await File.findOne({ originalName: originalname, rootOwner: ownerObjectId });
 
     if (existingFile) {
       // Push current version into versions array
@@ -63,7 +71,9 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
       existingFile.path = key; // store S3 key here
       existingFile.fileHash = fileHash;
       existingFile.uploadDate = new Date();
-      existingFile.aiProcessed = "pending";
+  existingFile.aiProcessed = "pending";
+  existingFile.rootOwner = ownerObjectId;
+  existingFile.uploadedByUser = req.user._id;
 
       await existingFile.save();
 
@@ -96,7 +106,9 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
       summary: "",
       extractedText: "",
       aiProcessed: "pending",
-      uploadedBy: req.user.username
+      uploadedBy: req.user.username,
+      uploadedByUser: req.user._id,
+      rootOwner: ownerObjectId
     });
 
     await newFile.save();

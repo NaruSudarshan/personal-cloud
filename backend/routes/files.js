@@ -5,6 +5,7 @@ const File = require("../models/File");
 const { authenticateToken } = require("../middleware/auth");
 const { S3Client, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const Embedding = require('../models/Embedding');
+const { ensureRootOwnerForGroup, getRootOwnerObjectId } = require('../utils/rootOwnership');
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET = process.env.S3_BUCKET;
@@ -12,8 +13,12 @@ const BUCKET = process.env.S3_BUCKET;
 // Get the latest version of each file
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    // With the new schema, each document IS the latest version. No aggregation needed.
-    const latestFiles = await File.find({}).sort({ uploadDate: -1 });
+  const ownerObjectId = getRootOwnerObjectId(req);
+  if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+
+  await ensureRootOwnerForGroup(ownerObjectId);
+
+  const latestFiles = await File.find({ rootOwner: ownerObjectId }).sort({ uploadDate: -1 });
 
     const fileData = latestFiles.map(file => ({
       id: file._id,
@@ -36,7 +41,12 @@ router.get("/", authenticateToken, async (req, res) => {
 // Get all versions of a specific file
 router.get("/versions/:name", authenticateToken, async (req, res) => {
   try {
-    const file = await File.findOne({ originalName: req.params.name });
+  const ownerObjectId = getRootOwnerObjectId(req);
+  if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+
+  await ensureRootOwnerForGroup(ownerObjectId);
+
+  const file = await File.findOne({ originalName: req.params.name, rootOwner: ownerObjectId });
 
     if (!file) {
       return res.status(404).json({ error: "File not found" });
@@ -70,17 +80,22 @@ router.get("/versions/:name", authenticateToken, async (req, res) => {
 // Download a specific file version by its unique ID
 router.get("/download/:id", authenticateToken, async (req, res) => {
   try {
+    const ownerObjectId = getRootOwnerObjectId(req);
+    if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+
+    await ensureRootOwnerForGroup(ownerObjectId);
+
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ error: "Invalid ID format" });
     }
 
     // First, check if the ID is for a main document (latest version)
-    let file = await File.findById(req.params.id);
+    let file = await File.findOne({ _id: req.params.id, rootOwner: ownerObjectId });
     let versionData = file;
 
     // If not found, check if it's an ID for a sub-document (older version)
     if (!file) {
-      file = await File.findOne({ "versions._id": req.params.id });
+      file = await File.findOne({ "versions._id": req.params.id, rootOwner: ownerObjectId });
       if (file) {
         versionData = file.versions.find(v => v._id.toString() === req.params.id);
       }
@@ -123,10 +138,15 @@ router.get("/download/:id", authenticateToken, async (req, res) => {
 // Delete a specific file version by its unique ID
 router.delete("/:id", authenticateToken, async (req, res) => {
   try {
+    const ownerObjectId = getRootOwnerObjectId(req);
+    if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+
+    await ensureRootOwnerForGroup(ownerObjectId);
+
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ error: "Invalid ID format" });
     }
-    const fileToDelete = await File.findById(req.params.id);
+    const fileToDelete = await File.findOne({ _id: req.params.id, rootOwner: ownerObjectId });
 
     // CASE 1: The ID is for the LATEST version (the main document)
     if (fileToDelete) {
@@ -183,7 +203,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     }
 
     // CASE 2: The ID is for an OLDER version (a sub-document)
-    const parentFile = await File.findOne({ "versions._id": req.params.id });
+  const parentFile = await File.findOne({ "versions._id": req.params.id, rootOwner: ownerObjectId });
     if (parentFile) {
       const versionToDelete = parentFile.versions.find(v => v._id.toString() === req.params.id);
       if (!versionToDelete) return res.status(404).json({ error: "Version not found in parent" });

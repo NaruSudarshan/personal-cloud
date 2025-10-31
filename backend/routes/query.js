@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { Groq } = require('groq-sdk');
 const { HuggingFaceTransformersEmbeddings } = require('@langchain/community/embeddings/hf_transformers');
 const File = require('../models/File');
 const Embedding = require('../models/Embedding');
 const { authenticateToken } = require('../middleware/auth');
+const { ensureRootOwnerForGroup, getRootOwnerObjectId } = require('../utils/rootOwnership');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const embeddings = new HuggingFaceTransformersEmbeddings({
@@ -40,22 +42,32 @@ const groqChat = async (messages, temperature = 0.3) => {
     });
 };
 
-// Common function to get file map
-const getFileMap = async (fileIds) => {
-    const files = await File.find({ _id: { $in: fileIds } });
-    return new Map(files.map(f => [f._id.toString(), f]));
-};
-
 // Main query endpoint
 router.post('/', authenticateToken, async (req, res) => {
     try {
         const { query } = req.body;
         if (!query) return res.status(400).json({ error: 'Query is required' });
 
+        const ownerObjectId = getRootOwnerObjectId(req);
+        if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+
+        await ensureRootOwnerForGroup(ownerObjectId);
+
+        const accessibleFiles = await File.find({ rootOwner: ownerObjectId });
+        if (!accessibleFiles.length) {
+            return res.json({
+                answer: "I couldn't find any information related to your question in your uploaded files.",
+                sources: []
+            });
+        }
+
+        const fileMap = new Map(accessibleFiles.map(f => [f._id.toString(), f]));
+        const fileIds = accessibleFiles.map(f => f._id);
+
         const queryVector = await embeddings.embedQuery(query);
-        
+
         // Get relevant chunks scoped to user's files
-        const relevantChunks = await getRelevantChunks(query, queryVector, req.user.username);
+        const relevantChunks = await getRelevantChunks(queryVector, fileIds);
         if (!relevantChunks.length) {
             return res.json({
                 answer: "I couldn't find any information related to your question in your uploaded files.",
@@ -63,7 +75,6 @@ router.post('/', authenticateToken, async (req, res) => {
             });
         }
 
-        const fileMap = await getFileMap([...new Set(relevantChunks.map(c => c.fileId))]);
 
         // Generate answer
         const context = relevantChunks.map(chunk => {
@@ -116,9 +127,14 @@ router.post('/summarize', authenticateToken, async (req, res) => {
         const { fileName, fileId } = req.body;
         if (!fileName && !fileId) return res.status(400).json({ error: 'fileName or fileId is required' });
 
+        const ownerObjectId = getRootOwnerObjectId(req);
+        if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+
+        await ensureRootOwnerForGroup(ownerObjectId);
+
         const file = await File.findOne({
             ...(fileId ? { _id: fileId } : { originalName: fileName }),
-            uploadedBy: req.user.username
+            rootOwner: ownerObjectId
         });
         if (!file) return res.status(404).json({ error: 'File not found' });
 
@@ -156,10 +172,9 @@ router.post('/summarize', authenticateToken, async (req, res) => {
 });
 
 // Helper function for chunk retrieval
-async function getRelevantChunks(query, queryVector, username) {
-    const userFiles = await File.find({ uploadedBy: username }).select('_id');
-    if (!userFiles.length) return [];
-    const fileIds = userFiles.map(f => f._id);
+async function getRelevantChunks(queryVector, fileIds) {
+    const uniqueIds = [...new Set(fileIds.map(id => id.toString()))].map(id => new mongoose.Types.ObjectId(id));
+    if (!uniqueIds.length) return [];
 
     try {
         const results = await Embedding.aggregate([
@@ -173,7 +188,7 @@ async function getRelevantChunks(query, queryVector, username) {
                     }
                 }
             },
-            { $match: { fileId: { $in: fileIds } } },
+            { $match: { fileId: { $in: uniqueIds } } },
             { $limit: 20 },
             { $project: { score: { $meta: "searchScore" }, fileId: 1, text: 1 } }
         ]);
@@ -182,7 +197,7 @@ async function getRelevantChunks(query, queryVector, username) {
         console.warn('Atlas search failed, using local KNN:', err.message);
     }
 
-    const knnResults = await localKNN(queryVector, fileIds, 20);
+    const knnResults = await localKNN(queryVector, uniqueIds, 20);
     return knnResults.map(k => ({ score: k.score, fileId: k.fileId, text: k.text }));
 }
 

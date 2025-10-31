@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { normalizeToObjectId } = require('../utils/rootOwnership');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -24,6 +25,27 @@ const authenticateToken = async (req, res, next) => {
       return res.status(403).json({ error: 'User account expired or inactive' });
     }
 
+    let rootOwnerId = user.role === 'root' ? user._id : user.rootOwner || user.createdBy;
+
+    if (user.role === 'root') {
+      let shouldSave = false;
+      if (!user.rootOwner || user.rootOwner.toString() !== user._id.toString()) {
+        user.rootOwner = user._id;
+        shouldSave = true;
+      }
+      if (!user.createdBy || user.createdBy.toString() !== user._id.toString()) {
+        user.createdBy = user._id;
+        shouldSave = true;
+      }
+      if (shouldSave) {
+        await user.save();
+      }
+      rootOwnerId = user._id;
+    } else if (!rootOwnerId) {
+      return res.status(403).json({ error: 'User is not associated with a root owner' });
+    }
+
+    req.rootOwnerId = normalizeToObjectId(rootOwnerId);
     req.user = user;
     next();
   } catch (error) {

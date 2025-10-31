@@ -11,6 +11,11 @@ const versionSchema = new mongoose.Schema({
 });
 
 const fileSchema = new mongoose.Schema({
+  rootOwner: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true
+  },
   originalName: { type: String, required: true },
   savedName: { type: String, required: true },
   size: { type: Number, required: true },
@@ -29,6 +34,10 @@ const fileSchema = new mongoose.Schema({
   },
   processingStartedAt: { type: Date },
   uploadedBy: { type: String, default: "root" },
+  uploadedByUser: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   uploadDate: { type: Date, default: Date.now }
 });
 

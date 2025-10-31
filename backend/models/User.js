@@ -18,6 +18,14 @@ const userSchema = new mongoose.Schema({
     enum: ['root', 'user'],
     default: 'user'
   },
+  rootOwner: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   expiryTime: {
     type: Date,
     required: true
@@ -31,6 +39,20 @@ const userSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
+});
+
+userSchema.pre('save', function(next) {
+  if (this.role === 'root') {
+    if (!this.rootOwner) {
+      this.rootOwner = this._id;
+    }
+    if (!this.createdBy) {
+      this.createdBy = this._id;
+    }
+  } else if (!this.rootOwner && this.createdBy) {
+    this.rootOwner = this.createdBy;
+  }
+  next();
 });
 
 // // Hash password before saving

@@ -3,34 +3,43 @@ const router = express.Router();
 const File = require('../models/File');
 const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
+const { ensureRootOwnerForGroup, getRootOwnerObjectId } = require('../utils/rootOwnership');
+
+const STORAGE_LIMIT_BYTES = parseInt(process.env.ROOT_STORAGE_LIMIT_BYTES || '', 10) || (20 * 1024 * 1024 * 1024);
 
 // Get dashboard statistics
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
-    // Get total files count and size
-    const files = await File.find({});
+    const ownerObjectId = getRootOwnerObjectId(req);
+    if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+
+    await ensureRootOwnerForGroup(ownerObjectId);
+
+    // Get total files count and size scoped to this root owner
+  const files = await File.find({ rootOwner: ownerObjectId });
     const totalFiles = files.length;
     const totalStorageBytes = files.reduce((acc, file) => acc + file.size, 0);
     const totalStorageMB = (totalStorageBytes / (1024 * 1024)).toFixed(2);
 
-    // Calculate storage usage percentage (assuming 100GB total storage)
-    const totalStorageGB = 100 * 1024 * 1024 * 1024; // 100 GB in bytes
-    const storageUsage = Math.min(100, (totalStorageBytes / totalStorageGB * 100).toFixed(1));
+  // Calculate storage usage percentage based on configured limit
+  const storageUsage = Math.min(100, (totalStorageBytes / STORAGE_LIMIT_BYTES * 100).toFixed(1));
 
     // Get active users (not expired and isActive true)
     const activeUsers = await User.countDocuments({
       isActive: true,
-      expiryTime: { $gt: new Date() }
+      expiryTime: { $gt: new Date() },
+      rootOwner: ownerObjectId
     });
 
     // Get recent files with upload info
-    const recentFiles = await File.find({})
+    const recentFiles = await File.find({ rootOwner: ownerObjectId })
       .sort({ uploadDate: -1 })
       .limit(5)
       .select('originalName mimeType size uploadDate uploadedBy aiProcessed');
 
     // Get AI processing status counts
     const aiStatusCounts = await File.aggregate([
+      { $match: { rootOwner: ownerObjectId } },
       {
         $group: {
           _id: '$aiProcessed',
@@ -41,6 +50,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
 
     // Get file type distribution
     const fileTypeDistribution = await File.aggregate([
+      { $match: { rootOwner: ownerObjectId } },
       {
         $group: {
           _id: { $arrayElemAt: [{ $split: ["$mimeType", "/"] }, 1] },
@@ -66,7 +76,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
     res.json({
       stats: {
         totalFiles,
-        totalStorage: `${totalStorageMB} MB`,
+  totalStorage: `${totalStorageMB} MB`,
         activeUsers,
         aiProcessing
       },

@@ -72,7 +72,11 @@ router.get('/me', authenticateToken, async (req, res) => {
 // Get all users (root only)
 router.get('/users', authenticateToken, requireRoot, async (req, res) => {
   try {
-    const users = await User.find({ role: { $ne: 'root' } }) // Exclude root users
+    const rootOwnerId = req.user.rootOwner || req.user._id;
+    const users = await User.find({
+      role: { $ne: 'root' },
+      rootOwner: rootOwnerId
+    }) // Exclude root users
       .select('username password role expiryTime isActive createdAt')
       .sort({ createdAt: -1 });
     res.json({ users });
@@ -112,7 +116,9 @@ router.post('/users', authenticateToken, requireRoot, async (req, res) => {
       password,
       role: 'user',
       expiryTime: new Date(expiryTime),
-      isActive: true
+      isActive: true,
+      createdBy: req.user._id,
+      rootOwner: req.user.rootOwner || req.user._id
     });
 
     await newUser.save();
@@ -146,7 +152,8 @@ router.delete('/users/:userId', authenticateToken, requireRoot, async (req, res)
       return res.status(400).json({ error: 'Invalid user ID format' });
     }
 
-    const user = await User.findById(userId);
+  const rootOwnerId = req.user.rootOwner || req.user._id;
+  const user = await User.findOne({ _id: userId, rootOwner: rootOwnerId });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -155,7 +162,7 @@ router.delete('/users/:userId', authenticateToken, requireRoot, async (req, res)
       return res.status(403).json({ error: 'Cannot delete root user' });
     }
 
-    await User.findByIdAndDelete(userId);
+  await User.deleteOne({ _id: userId, rootOwner: rootOwnerId });
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
@@ -170,7 +177,8 @@ router.put('/users/:userId', authenticateToken, requireRoot, async (req, res) =>
     const { userId } = req.params;
     const { expiryTime, isActive } = req.body;
 
-    const user = await User.findById(userId);
+  const rootOwnerId = req.user.rootOwner || req.user._id;
+  const user = await User.findOne({ _id: userId, rootOwner: rootOwnerId });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -183,11 +191,15 @@ router.put('/users/:userId', authenticateToken, requireRoot, async (req, res) =>
     if (expiryTime) updateData.expiryTime = new Date(expiryTime);
     if (typeof isActive === 'boolean') updateData.isActive = isActive;
 
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: userId, rootOwner: rootOwnerId },
       updateData,
       { new: true }
     );
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     res.json({
       message: 'User updated successfully',
