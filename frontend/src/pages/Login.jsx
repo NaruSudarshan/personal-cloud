@@ -36,7 +36,7 @@ function Login() {
           <div className="w-20 h-20 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center mx-auto mb-4">
             <FaCloudUploadAlt className="text-white text-3xl" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Personal Cloud</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">OneVault</h1>
           <p className="text-gray-400">AI-Powered File Storage & Search</p>
         </div>
 
