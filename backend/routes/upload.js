@@ -1,39 +1,55 @@
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
 const crypto = require("crypto");
 const router = express.Router();
 const File = require("../models/File");
 const { authenticateToken } = require("../middleware/auth");
 const { processPDFForEmbeddings } = require('../services/embeddingProcessor');
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
-const uploadDir = path.join(__dirname, "../uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
-// Multer storage config
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now();
-    cb(null, `${uniqueSuffix}-${file.originalname}`);
-  }
-});
+// Use memory storage so we can stream directly to S3 and compute hash from buffer
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Helper: calculate file hash
-function calculateFileHash(filePath) {
-  const buffer = fs.readFileSync(filePath);
+// Initialize S3 client
+const s3 = new S3Client({ region: process.env.AWS_REGION });
+const BUCKET = process.env.S3_BUCKET;
+
+// calculate file hash from a Buffer
+function calculateFileHashFromBuffer(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
 router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
   try {
-    const { originalname, filename, size, mimetype, path: filePath } = req.file;
-    const fileHash = calculateFileHash(filePath);
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    // Check if file already exists in DB
-    let existingFile = await File.findOne({ originalName: originalname });
+    const { originalname, size, mimetype, buffer } = req.file;
+    const fileHash = calculateFileHashFromBuffer(buffer);
+
+    const rootOwnerId = req.user.rootOwner;
+
+    // S3 key: user prefix + timestamp + original name
+    const savedName = `${Date.now()}-${originalname}`;
+    const key = `${req.user.username}/${savedName}`;
+
+    // Upload to S3
+    if (!BUCKET) throw new Error('S3_BUCKET is not configured in environment variables');
+
+    await s3.send(new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: mimetype
+    }));
+
+    // Check if a file with the same name already exists under the same rootOwner
+    // (we want uploads by any user under the same root to become new versions)
+    const fileFilter = {
+      originalName: originalname,
+      rootOwner: rootOwnerId
+    };
+    let existingFile = await File.findOne(fileFilter);
 
     if (existingFile) {
       // Push current version into versions array
@@ -42,25 +58,31 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
         savedName: existingFile.savedName,
         size: existingFile.size,
         path: existingFile.path,
+        mimeType: existingFile.mimeType,
         uploadDate: existingFile.uploadDate,
-        fileHash: existingFile.fileHash
+        fileHash: existingFile.fileHash,
+        uploadedBy: existingFile.uploadedBy
       });
 
-      // Replace with new version
+      // Replace with new version metadata
       existingFile.version += 1;
-      existingFile.savedName = filename;
+      existingFile.savedName = savedName;
       existingFile.size = size;
       existingFile.mimeType = mimetype;
-      existingFile.path = filePath;
+      existingFile.path = key; // store S3 key here
       existingFile.fileHash = fileHash;
       existingFile.uploadDate = new Date();
       existingFile.aiProcessed = "pending";
+      existingFile.summary = "";
+      existingFile.extractedText = "";
+      existingFile.rootOwner = rootOwnerId;
+      existingFile.uploadedBy = req.user._id;
 
       await existingFile.save();
 
       if (mimetype === 'application/pdf') {
-        console.log(`🔍 Starting AI processing for PDF: ${filename}`);
-        processPDFForEmbeddings(existingFile._id); // Or newFile._id
+        console.log(`🔍 Starting AI processing for PDF: ${savedName}`);
+        processPDFForEmbeddings(existingFile._id, rootOwnerId);
       }
 
       return res.status(200).json({
@@ -76,10 +98,10 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
     // Create new file document
     const newFile = new File({
       originalName: originalname,
-      savedName: filename,
+      savedName,
       size,
       mimeType: mimetype,
-      path: filePath,
+      path: key, // S3 key
       fileHash,
       version: 1,
       versions: [],
@@ -87,15 +109,16 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
       summary: "",
       extractedText: "",
       aiProcessed: "pending",
-      uploadedBy: req.user.username
+      uploadedBy: req.user._id,
+      rootOwner: rootOwnerId
     });
 
     await newFile.save();
-    if (mimetype === 'application/pdf') {
-      console.log(`🔍 Starting AI processing for new PDF: ${filename}`);
-      processPDFForEmbeddings(newFile._id);
-    }
 
+    if (mimetype === 'application/pdf') {
+      console.log(`🔍 Starting AI processing for new PDF: ${savedName}`);
+      processPDFForEmbeddings(newFile._id, rootOwnerId);
+    }
 
     res.status(201).json({
       message: "File uploaded successfully",
@@ -107,7 +130,7 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
     });
   } catch (err) {
     console.error("Upload failed:", err);
-    res.status(500).json({ error: "File upload failed" });
+    res.status(500).json({ error: "File upload failed", details: err.message });
   }
 });
 

@@ -1,0 +1,8 @@
+1. Add a storage limit for each user
+2. update pie chart in dashboard to show storage usage
+3. disable delete button for users without delete permission
+4. fix sort and delete filter
+5. user sign in and register
+6. refactor embedding pipeline to use in-memory PDF loader (no uploads/ static dir)
+7. Rename the project
+8. rewrite the readme

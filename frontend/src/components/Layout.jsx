@@ -16,8 +16,8 @@ const Layout = ({ children }) => {
         </main>
       </div>
 
-      {/* Zeno AI Assistant */}
-      <ZenoAI />
+      {/* Zeno AI Assistant - Uncomment when ready */}
+      {/* <ZenoAI /> */}
     </div>
   );
 };

@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import api from '../lib/api';
+import { API_BASE_URL } from '../lib/config';
 
 const AuthContext = createContext();
 
@@ -12,87 +14,99 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
-
-  const API_BASE_URL = 'http://localhost:5000/api';
 
   // Check if user is authenticated on app load
   useEffect(() => {
     const checkAuth = async () => {
-      if (token) {
-        try {
-          const response = await fetch(`${API_BASE_URL}/auth/me`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
+      try {
+        const response = await api.get('/auth/me');
 
-          if (response.ok) {
-            const data = await response.json();
-            setUser(data.user);
-          } else {
-            // Token is invalid, clear it
-            logout();
-          }
-        } catch (error) {
-          console.error('Auth check error:', error);
-          logout();
+        if (response.data.user) {
+          setUser(response.data.user);
         }
+      } catch (error) {
+        // User is not authenticated, clear state
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     checkAuth();
-  }, [token]);
+  }, []);
 
-  const login = async (username, password) => {
+  const signup = async (email, username, password, name) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ username, password })
+      const response = await api.post('/auth/signup', {
+        email,
+        username,
+        password,
+        name
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-
-      setToken(data.token);
-      setUser(data.user);
-      localStorage.setItem('token', data.token);
-
-      return { success: true };
+      setUser(response.data.user);
+      return { success: true, data: response.data };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Signup failed' 
+      };
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('token');
+  const login = async (identifier, password) => {
+    try {
+      const response = await api.post('/auth/login', {
+        identifier,
+        password
+      });
+
+      setUser(response.data.user);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Login failed' 
+      };
+    }
   };
 
-  const isAuthenticated = () => {
-    return !!token && !!user;
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear user state regardless of API call success
+      setUser(null);
+    }
   };
 
-  const isRoot = () => {
-    return user?.role === 'root';
+  const refreshTokens = async () => {
+    try {
+      const response = await api.post('/auth/refresh');
+      return { success: true, data: response.data };
+    } catch (error) {
+      // If refresh fails, logout user
+      logout();
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Token refresh failed' 
+      };
+    }
   };
+
+  const isAuthenticated = !!user;
+  const isRoot = user?.role === 'root';
 
   const value = {
     user,
-    token,
     loading,
+    signup,
     login,
     logout,
+    refreshTokens,
     isAuthenticated,
     isRoot,
     API_BASE_URL
@@ -104,4 +118,3 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
