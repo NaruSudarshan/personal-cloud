@@ -21,7 +21,7 @@ const Sidebar = () => {
             <FaCloudUploadAlt className="text-white text-lg" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">Personal Cloud</h1>
+            <h1 className="text-xl font-bold text-white">OneVault</h1>
             <p className="text-xs text-gray-400">AI-Powered Storage</p>
           </div>
         </div>

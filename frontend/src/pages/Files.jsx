@@ -150,7 +150,7 @@ const MyFiles = () => {
             {user?.role === 'root' ? 'Manage and search through all files' : 'Access your assigned files'}
           </p>
         </div>
-        <div className="flex items-center space-x-3">
+        {/* <div className="flex items-center space-x-3">
           <button className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">
             <FaFilter className="text-gray-400" />
             <span className="text-white">Filter</span>
@@ -159,7 +159,7 @@ const MyFiles = () => {
             <FaSort className="text-gray-400" />
             <span className="text-white">Sort</span>
           </button>
-        </div>
+        </div> */}
       </div>
 
       {/* AI Search Section */}
@@ -415,18 +415,21 @@ const MyFiles = () => {
                           >
                             <FaDownload className="text-sm" />
                           </button>
-                          <button 
-                            className="p-1.5 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded transition-colors"
-                            onClick={() => handleDelete(v.id, file.name)} 
-                            title="Delete"
-                            disabled={deletingId === v.id}
-                          >
-                            {deletingId === v.id ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            ) : (
-                              <FaTrashAlt className="text-sm" />
-                            )}
-                          </button>
+                          {/* DELETE button: render only for root users */}
+                          {user?.role === 'root' && (
+                            <button 
+                              className="p-1.5 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded transition-colors flex items-center"
+                              onClick={() => handleDelete(file.id, file.name)} 
+                              title="Delete"
+                              disabled={deletingId === file.id}
+                            >
+                              {deletingId === file.id ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              ) : (
+                                <FaTrashAlt className="text-sm" />
+                              )}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

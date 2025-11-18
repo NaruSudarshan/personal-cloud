@@ -1,124 +1,104 @@
-# Personal Cloud: AI-Powered File Storage & Search
+# OneVault
 
-<!-- <div align="center">
-  <img src="https://via.placeholder.com/150/FF7A00/FFFFFF?text=PC" alt="Personal Cloud Logo" width="150"/>
-</div> -->
+A modern, self-hosted file storage and search app with AI-powered document search and versioning.
 
-<h3 align="center">
-  A modern, full-stack web application for secure and intelligent file storage, featuring AI-powered semantic search.
-</h3>
+This repository contains a React + Vite frontend and an Express + MongoDB backend. The app supports role-based users (root/admin and regular temporary users), file uploads with versioning, AI processing for PDFs (embeddings & search), and S3-compatible storage for file objects.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React Badge"/>
-  <img src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js Badge"/>
-  <img src="https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB Badge"/>
-  <img src="https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white" alt="Express.js Badge"/>
-  <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS Badge"/>
-</p>
+---
 
-## ✨ Key Features
+## Quick overview
 
-* **🔐 Secure User Authentication:** JWT-based authentication with role-based access control (user and root roles).
-* **📂 File Upload & Management:** Drag-and-drop file uploads, versioning, download, and deletion functionalities.
-* **🧠 AI-Powered Search:** Ask natural language questions about your PDF documents and get intelligent answers powered by Large Language Models (LLMs) and vector embeddings.
-* **📊 Dashboard Analytics:** An intuitive dashboard providing statistics on total files, storage usage, active users, and AI processing status.
-* **👥 User Management (Admin):** Root users can create, manage, and delete user accounts with temporary access.
-* **📱 Responsive UI:** A sleek and modern user interface built with React and Tailwind CSS.
+- Frontend: `frontend/` (React, Vite, TailwindCSS)
+- Backend: `backend/` (Node.js, Express, Mongoose)
+- Database: MongoDB (Atlas or self-hosted)
+- Storage: AWS S3 (or compatible S3 endpoint)
+- AI: Groq / configured model for embeddings and LLM inference
 
-## 🛠️ Tech Stack
+---
 
-**Frontend:**
+## Prerequisites
 
-* **React:** A JavaScript library for building user interfaces.
-* **React Router:** For declarative routing in React.
-* **Tailwind CSS:** A utility-first CSS framework for rapid UI development.
-* **Axios:** A promise-based HTTP client for the browser and Node.js.
-* **Chart.js:** For creating beautiful and responsive charts.
+- Node.js (v16+ recommended)
+- npm or yarn
+- MongoDB Atlas account or local MongoDB
+- AWS account and S3 bucket (or any S3-compatible storage)
+- Groq API key (for LLM inference) — optional but required for AI features
 
-**Backend:**
+---
 
-* **Node.js:** A JavaScript runtime built on Chrome's V8 JavaScript engine.
-* **Express.js:** A minimal and flexible Node.js web application framework.
-* **MongoDB:** A NoSQL database for storing application data.
-* **Mongoose:** An elegant MongoDB object modeling tool for Node.js.
-* **JWT (JSON Web Tokens):** For secure user authentication.
-* **LangChain & Hugging Face Transformers:** For creating vector embeddings from PDF documents.
-* **Groq SDK:** For interacting with the Groq API for fast AI inference.
-* **Multer:** A Node.js middleware for handling `multipart/form-data`.
+## Setup (development)
 
-## 🚀 Getting Started
+1. Clone the repo and install dependencies:
 
-### Prerequisites
+```bash
+git clone https://github.com/NaruSudarshan/OneVault.git
+cd personal-cloud
 
-* Node.js (v14 or later)
-* npm
-* MongoDB Atlas account or a local MongoDB instance.
-* Groq API Key
+# backend
+cd backend
+npm install
 
-### Installation
+# frontend (open a second terminal)
+cd ../frontend
+npm install
+```
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/NaruSudarshan/personal-cloud.git
-    cd personal-cloud
-    ```
+2. Create a `.env` file for the backend from the example and fill values:
 
-2.  **Install backend dependencies:**
-    ```bash
-    cd backend
-    npm install
-    ```
+```bash
+cp backend/.env.example backend/.env
+# edit backend/.env and fill the required values (MONGODB_URI, S3, AWS keys, tokens...)
+```
 
-3.  **Install frontend dependencies:**
-    ```bash
-    cd ../frontend
-    npm install
-    ```
+Important: Do NOT commit real secrets. Keep `.env` out of source control.
 
-### Configuration
+## Environment variables
 
-1.  **Create a `.env` file in the `backend` directory (see `backend/.env.example` for the full list):**
-  ```env
-  PORT=5000
-  JWT_SECRET=<jwt_secret>
-  MONGODB_URI=<your_mongodb_uri>
-  DB_NAME=<your_database_name>
-  ROOT_STORAGE_LIMIT_BYTES=<optional_storage_cap_bytes>
-  GROQ_API_KEY=<your_groq_api_key>
-  GROQ_MODEL=llama-3.3-70b-versatile
-  GOOGLE_CLIENT_ID=<oauth_client_id>
-  OAUTH_USER_DURATION_DAYS=365
-  S3_BUCKET=<aws_bucket_name>
-  AWS_REGION=<aws_region>
-  AWS_ACCESS_KEY_ID=<aws_access_key>
-  AWS_SECRET_ACCESS_KEY=<aws_secret_key>
-  ```
-2.  **Create a root user in your MongoDB database.**
+See `backend/.env.example` for the full list. Key variables include:
 
-## 🏃‍♂️ Usage
+- `MONGODB_URI`, `DB_NAME` — MongoDB connection
+- `S3_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` — S3 storage
+- `ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`, `JWT_SECRET` — JWT secrets
+- `FRONTEND_URL` — used for CORS/cookie config in development
 
-1.  **Start the backend server:**
-    ```bash
-    cd backend
-    node index.js
-    ```
+If you add or change environment keys, document them in `backend/.env.example`.
 
-2.  **Start the frontend development server:**
-    ```bash
-    cd frontend
-    npm run dev
-    ```
+---
 
-The application will be available at `http://localhost:5173/`.
+## Run locally
 
-## 🛣️ Roadmap
+Start the backend (development):
 
-* [ ] **Cloud Storage Integration:** Integrate with cloud storage providers like AWS S3 for scalable and robust file storage.
-* [ ] **Expanded File Type Support:** Add support for more file types (e.g., DOCX, TXT) for AI-powered search.
-* [ ] **Folder Management:** Implement a folder system for better organization of files.
-* [ ] **Advanced Sharing & Collaboration:** Introduce features for sharing files and collaborating with other users.
-* [ ] **Detailed Analytics:** Provide more in-depth analytics and reporting on file usage and user activity.
+```bash
+cd backend
+npm run dev   # or: node index.js
+```
 
-## 📜 License
+Start the frontend:
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+```bash
+cd frontend
+npm run dev
+```
+
+Open the app in your browser at `http://localhost:5173`.
+
+---
+
+## Features
+
+- Role-based user management (root/admin and temporary users)
+- File upload with versioning (uploads with same original filename under the same `rootOwner` are added as new versions)
+- AI-powered PDF processing (embeddings and semantic search)
+- S3-compatible storage for file objects
+- Dashboard with statistics (files, storage usage, AI processing state)
+
+---
+
+## Notes & Operational Guidance
+
+- The backend returns generated temporary user passwords only once at creation. Keep a copy immediately — the password is not stored in plaintext and will not be returned again.
+
+---
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)

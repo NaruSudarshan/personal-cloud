@@ -137,11 +137,11 @@ const Users = () => {
                     <h1 className="text-3xl font-bold text-white">User Management</h1>
                     <p className="text-gray-400 mt-1">Create and manage temporary user accounts</p>
                 </div>
-                <div className="flex items-center space-x-2 text-sm text-gray-400">
+                {/* <div className="flex items-center space-x-2 text-sm text-gray-400">
                     <span>{users.length} users</span>
                     <span>•</span>
                     <span>{users.filter(u => u.isActive && !isExpired(u.expiryTime)).length} active</span>
-                </div>
+                </div> */}
             </div>
 
             {/* Error Message */}
