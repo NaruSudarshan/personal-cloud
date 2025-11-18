@@ -8,10 +8,8 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const Dashboard = () => {
-  const { token } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [dashboardData, setDashboardData] = useState({
+  const { user } = useAuth();
+  const defaultDashboardData = {
     stats: {
       totalFiles: 0,
       totalStorage: '0 MB',
@@ -23,8 +21,13 @@ const Dashboard = () => {
         error: 0
       }
     },
-    storageUsage: 0
-  });
+    storageUsage: 0,
+    recentFiles: [],
+    fileTypes: {}
+  };
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [dashboardData, setDashboardData] = useState(defaultDashboardData);
 
   useEffect(() => {
     fetchDashboardData();
@@ -32,15 +35,29 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const normalizeDashboardData = (data) => {
+    const safeData = data && typeof data === 'object' ? data : {};
+    return {
+      ...defaultDashboardData,
+      ...safeData,
+    stats: {
+      ...defaultDashboardData.stats,
+        ...safeData.stats,
+      aiProcessing: {
+        ...defaultDashboardData.stats.aiProcessing,
+          ...(safeData.stats?.aiProcessing || {})
+      }
+    },
+      storageUsage: typeof safeData.storageUsage === 'number'
+        ? Math.max(0, Math.min(100, safeData.storageUsage))
+        : defaultDashboardData.storageUsage
+    };
+  };
+
   const fetchDashboardData = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/dashboard/stats', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      setDashboardData(response.data);
+      const response = await axios.get('/api/dashboard/stats');
+      setDashboardData(normalizeDashboardData(response.data));
       setError('');
     } catch (err) {
       setError('Failed to fetch dashboard data');
@@ -68,11 +85,17 @@ const Dashboard = () => {
     }
   };
 
+  const stats = dashboardData?.stats || defaultDashboardData.stats;
+  const aiProcessing = stats.aiProcessing || defaultDashboardData.stats.aiProcessing;
+  const storageUsage = typeof dashboardData?.storageUsage === 'number'
+    ? dashboardData.storageUsage
+    : defaultDashboardData.storageUsage;
+
   // Prepare chart data
   const aiStatusData = {
-    labels: Object.keys(dashboardData.stats.aiProcessing),
+    labels: Object.keys(aiProcessing),
     datasets: [{
-      data: Object.values(dashboardData.stats.aiProcessing),
+      data: Object.values(aiProcessing),
       backgroundColor: [
         'rgba(255, 206, 86, 0.8)',   // pending
         'rgba(54, 162, 235, 0.8)',   // processing
@@ -92,7 +115,7 @@ const Dashboard = () => {
   const storageData = {
     labels: ['Used', 'Available'],
     datasets: [{
-      data: [dashboardData.storageUsage, 100 - dashboardData.storageUsage],
+      data: [storageUsage, 100 - storageUsage],
       backgroundColor: [
         'rgba(75, 192, 192, 0.8)',
         'rgba(55, 65, 81, 0.5)'
@@ -129,11 +152,9 @@ const Dashboard = () => {
           <h1 className="text-3xl font-bold text-white">Dashboard</h1>
           <p className="text-gray-400 mt-1">Overview of your storage and processing status</p>
         </div>
-        {/* <div className="flex items-center space-x-2 text-sm text-gray-400">
-          <span>{dashboardData.stats.totalFiles} files</span>
-          <span>•</span>
-          <span>{dashboardData.stats.activeUsers} active users</span>
-        </div> */}
+        <div className="text-sm text-gray-400">
+          Welcome back, {user?.name || user?.username}!
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -143,7 +164,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400 font-medium">Total Files</p>
-              <p className="text-2xl font-bold text-white mt-1">{dashboardData.stats.totalFiles}</p>
+              <p className="text-2xl font-bold text-white mt-1">{stats.totalFiles}</p>
             </div>
             <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
               <FaFileAlt className="text-white text-xl" />
@@ -156,7 +177,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400 font-medium">Storage Used</p>
-              <p className="text-2xl font-bold text-white mt-1">{dashboardData.stats.totalStorage}</p>
+              <p className="text-2xl font-bold text-white mt-1">{stats.totalStorage}</p>
             </div>
             <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center">
               <FaDatabase className="text-white text-xl" />
@@ -164,25 +185,27 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Users */}
-        <div className="bg-foreground rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-400 font-medium">Active Users</p>
-              <p className="text-2xl font-bold text-white mt-1">{dashboardData.stats.activeUsers}</p>
-            </div>
-            <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
-              <FaUsers className="text-white text-xl" />
+        {/* Users - Only show for root users */}
+        {user?.role === 'root' && (
+          <div className="bg-foreground rounded-xl border border-gray-800 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-400 font-medium">Active Users</p>
+                <p className="text-2xl font-bold text-white mt-1">{stats.activeUsers}</p>
+              </div>
+              <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
+                <FaUsers className="text-white text-xl" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* AI Ready */}
         <div className="bg-foreground rounded-xl border border-gray-800 p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400 font-medium">AI Ready Files</p>
-              <p className="text-2xl font-bold text-white mt-1">{dashboardData.stats.aiProcessing.ready}</p>
+              <p className="text-2xl font-bold text-white mt-1">{aiProcessing.ready}</p>
             </div>
             <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center">
               <FaRobot className="text-white text-xl" />

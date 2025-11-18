@@ -5,38 +5,40 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const mongoose = require("mongoose");
+const cookieParser = require('cookie-parser');
 require("dotenv").config();
 
 // --- Initialization ---
 const app = express();
 const PORT = process.env.PORT || 5000;
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  console.error('❌ MONGODB_URI is required. Please update backend/.env');
+  process.exit(1);
+}
 
 // --- Global Middleware ---
 // IMPORTANT: Middleware must be defined BEFORE the routes that use them.
 // 1. Enable CORS for all routes
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
 
 // 2. Enable Express to parse JSON request bodies
 app.use(express.json());
 
-// 3. Serve static files from the 'uploads' directory
+// 3. Enable cookie parser for JWT tokens
+app.use(cookieParser());
+
+// 4. Serve static files from the 'uploads' directory
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // --- Database Connection ---
-mongoose.connect(process.env.MONGODB_URI)
-// remove if email index doesnt exist
-  .then(async () => {
+mongoose.connect(MONGODB_URI)
+  .then(() => {
     console.log("✅ MongoDB connected successfully.");
-    try {
-      await mongoose.connection.db.collection('users').dropIndex('email_1');
-      console.log('ℹ️ Dropped legacy email index on users collection.');
-    } catch (err) {
-      const safeCodes = ['IndexNotFound', 'NamespaceNotFound'];
-      const safeNumericCodes = [26, 27]; // ns not found, index not found
-      if (!safeCodes.includes(err.codeName) && !safeNumericCodes.includes(err.code)) {
-        console.warn('⚠️ Could not drop legacy email index:', err.message);
-      }
-    }
   })
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
@@ -50,11 +52,16 @@ const dashboardRoute = require('./routes/dashboard');
 // --- API Route Definitions ---
 // Use the '/api' prefix for all backend routes. This is a standard practice
 // to avoid conflicts with frontend routes.
-app.use("/api/files", filesRoute); // ✅ Corrected Path
+app.use("/api/files", filesRoute);
 app.use("/api/upload", uploadRoute);
 app.use('/api/query', queryRoute);
 app.use('/api/auth', authRoute);
 app.use('/api/dashboard', dashboardRoute);
+
+// --- Health Check ---
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', message: 'Server is running' });
+});
 
 // --- Server Startup ---
 app.listen(PORT, () => {

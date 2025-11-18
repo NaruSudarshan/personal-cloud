@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { FaCloudUploadAlt, FaFileAlt, FaTimes, FaCheck, FaSpinner } from "react-icons/fa";
+import axios from 'axios';
 
 const Upload = () => {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
@@ -43,35 +44,29 @@ const Upload = () => {
     if (!selectedFile) return;
 
     setUploading(true);
+    setMessage("");
+    
     const formData = new FormData();
     formData.append("file", selectedFile);
 
     try {
-      const res = await fetch("http://localhost:5000/api/upload", {
-        method: "POST",
+      const response = await axios.post('/api/upload', formData, {
         headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData,
+          'Content-Type': 'multipart/form-data'
+        }
       });
 
-      const data = await res.json();
-
-      if (res.ok) {
-        setMessage(`✅ Successfully uploaded: ${data.file.name}`);
-        setSelectedFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-      } else {
-        setMessage(`❌ Upload failed: ${data.error || data.message}`);
+      setMessage(`✅ Successfully uploaded: ${response.data.file.name}`);
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
       }
-    } catch (err) {
-      console.error("Upload error:", err);
-      setMessage("❌ Upload failed: Server error");
+    } catch (error) {
+      console.error("Upload error:", error);
+      setMessage(`❌ Upload failed: ${error.response?.data?.error || 'Server error'}`);
+    } finally {
+      setUploading(false);
     }
-
-    setUploading(false);
   };
 
   const removeFile = () => {
@@ -119,7 +114,10 @@ const Upload = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-white">Upload Files</h1>
-          <p className="text-gray-400 mt-1">Upload and manage your files. Zeno AI can search through your PDF documents.</p>
+          <p className="text-gray-400 mt-1">
+            Upload and manage your files. Zeno AI can search through your PDF documents.
+            {user?.role === 'user' && " You can view and download files uploaded by the account owner."}
+          </p>
         </div>
       </div>
 

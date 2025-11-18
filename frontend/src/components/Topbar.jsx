@@ -27,7 +27,11 @@ const Topbar = () => {
             </div>
             <div className="hidden md:block">
               <p className="text-sm font-medium text-white">{user?.username}</p>
-              <p className="text-xs text-gray-400 capitalize">{user?.role} • Expires {formatDate(user?.expiryTime)}</p>
+              <p className="text-xs text-gray-400 capitalize">
+                {user?.role} 
+                {user?.email && ` • ${user.email}`}
+                {user?.expiryTime && ` • Expires ${formatDate(user.expiryTime)}`}
+              </p>
             </div>
           </div>
 

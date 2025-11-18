@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { FaDownload, FaTrashAlt, FaRobot, FaSearch, FaFileAlt, FaClock, FaStar, FaFilter, FaSort } from "react-icons/fa";
-import axios from "axios";
+import api from "../lib/api";
+import { API_BASE_URL } from "../lib/config";
 
 const MyFiles = () => {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [files, setFiles] = useState([]);
   const [versionsMap, setVersionsMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -15,15 +16,13 @@ const MyFiles = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [summarizingId, setSummarizingId] = useState(null);
 
+  // <-- Added deletingId state
+  const [deletingId, setDeletingId] = useState(null);
+
   const fetchFiles = async () => {
     setLoading(true);
     try {
-      const res = await axios.get("http://localhost:5000/api/files", {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const res = await api.get('/files');
       setFiles(res.data);
     } catch (err) {
       console.error("Error fetching files:", err);
@@ -41,12 +40,7 @@ const MyFiles = () => {
       });
     } else {
       try {
-        const res = await axios.get(`http://localhost:5000/api/files/versions/${fileName}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const res = await api.get(`/files/versions/${encodeURIComponent(fileName)}`);
         setVersionsMap((prev) => ({ ...prev, [fileName]: res.data }));
       } catch (err) {
         console.error("Error fetching versions:", err);
@@ -55,7 +49,7 @@ const MyFiles = () => {
   };
 
   const handleDownload = (fileId) => {
-    const url = `http://localhost:5000/api/files/download/${fileId}`;
+    const url = `${API_BASE_URL}/files/download/${fileId}`;
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', '');
@@ -65,29 +59,25 @@ const MyFiles = () => {
     document.body.removeChild(link);
   };
 
+  // <-- Updated handleDelete to manage deletingId state
   const handleDelete = async (fileId, fileName) => {
-    if (window.confirm("Are you sure you want to delete this version?")) {
-      try {
-        await axios.delete(`http://localhost:5000/api/files/${fileId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        fetchFiles();
-        if (versionsMap[fileName]) {
-          const res = await axios.get(`http://localhost:5000/api/files/versions/${fileName}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          setVersionsMap((prev) => ({ ...prev, [fileName]: res.data }));
-        }
-      } catch (err) {
-        console.error("Error deleting file:", err);
-        alert("Failed to delete file.");
+    if (!window.confirm("Are you sure you want to delete this version?")) {
+      return;
+    }
+
+    setDeletingId(fileId);
+    try {
+      await api.delete(`/files/${fileId}`);
+      await fetchFiles();
+      if (versionsMap[fileName]) {
+        const res = await api.get(`/files/versions/${encodeURIComponent(fileName)}`);
+        setVersionsMap((prev) => ({ ...prev, [fileName]: res.data }));
       }
+    } catch (err) {
+      console.error("Error deleting file:", err);
+      alert("Failed to delete file.");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -118,12 +108,7 @@ const MyFiles = () => {
     setShowSearchResults(true);
     
     try {
-      const res = await axios.post('http://localhost:5000/api/query', { query: searchQuery }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const res = await api.post('/query', { query: searchQuery });
       setAiAnswer(res.data.answer);
       setSearchResults(res.data.sources);
     } catch (err) {
@@ -136,18 +121,12 @@ const MyFiles = () => {
   };
 
   const handleSummarize = async (fileName, fileId) => {
-    // Only allow summarize if AI processing is ready (frontend disables button otherwise)
     setSummarizingId(fileId || fileName);
     setAiAnswer("");
     setSearchResults([]);
     setShowSearchResults(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/query/summarize', { fileName }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const res = await api.post('/query/summarize', { fileName });
       setAiAnswer(res.data.summary || 'No summary generated');
     } catch (err) {
       console.error('Summarize error:', err);
@@ -167,7 +146,9 @@ const MyFiles = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-white">My Files</h1>
-          <p className="text-gray-400 mt-1">Manage and search through your uploaded files</p>
+          <p className="text-gray-400 mt-1">
+            {user?.role === 'root' ? 'Manage and search through all files' : 'Access your assigned files'}
+          </p>
         </div>
         <div className="flex items-center space-x-3">
           <button className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">
@@ -303,8 +284,12 @@ const MyFiles = () => {
             <h2 className="text-xl font-semibold text-white">File Management</h2>
             <div className="flex items-center space-x-2 text-sm text-gray-400">
               <span>{files.length} files</span>
-              <span>•</span>
-              <span>2.3 GB total</span>
+              {user?.role === 'root' && (
+                <>
+                  <span>•</span>
+                  <span>All users</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -379,13 +364,23 @@ const MyFiles = () => {
                           >
                             <FaDownload className="text-sm" />
                           </button>
-                          <button 
-                            className="p-1.5 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded transition-colors"
-                            onClick={() => handleDelete(file.id, file.name)} 
-                            title="Delete"
-                          >
-                            <FaTrashAlt className="text-sm" />
-                          </button>
+
+                          {/* DELETE button: render only for root users */}
+                          {user?.role === 'root' && (
+                            <button 
+                              className="p-1.5 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded transition-colors flex items-center"
+                              onClick={() => handleDelete(file.id, file.name)} 
+                              title="Delete"
+                              disabled={deletingId === file.id}
+                            >
+                              {deletingId === file.id ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              ) : (
+                                <FaTrashAlt className="text-sm" />
+                              )}
+                            </button>
+                          )}
+                          
                         </div>
                       </td>
                     </tr>
@@ -403,7 +398,9 @@ const MyFiles = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="p-3"></td>
+                      <td className="p-3">
+                        <span className="text-gray-300 text-sm truncate block max-w-32">{v.uploadedBy || 'Unknown'}</span>
+                      </td>
                       <td className="p-3 text-gray-400 text-xs">{v.size}</td>
                       <td className="p-3 text-gray-400 text-xs">{formatDate(v.uploadedAt)}</td>
                       <td className="p-3">
@@ -422,8 +419,13 @@ const MyFiles = () => {
                             className="p-1.5 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded transition-colors"
                             onClick={() => handleDelete(v.id, file.name)} 
                             title="Delete"
+                            disabled={deletingId === v.id}
                           >
-                            <FaTrashAlt className="text-sm" />
+                            {deletingId === v.id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                              <FaTrashAlt className="text-sm" />
+                            )}
                           </button>
                         </div>
                       </td>

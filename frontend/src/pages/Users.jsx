@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { FaUserPlus, FaTrashAlt, FaCopy, FaEye, FaEyeSlash, FaUsers, FaCalendarAlt, FaKey } from "react-icons/fa";
+import axios from "axios";
 
 const Users = () => {
-    const { token, API_BASE_URL } = useAuth();
-    const UNDER_CONSTRUCTION = true;
+    const { user, API_BASE_URL } = useAuth();
     const [users, setUsers] = useState([]);
     const [username, setUsername] = useState("");
     const [expiryTime, setExpiryTime] = useState("");
@@ -12,28 +12,33 @@ const Users = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
+    // Only root users can access this page
+    if (user?.role !== 'root') {
+        return (
+            <div className="h-full flex items-center justify-center p-6">
+                <div className="text-center">
+                    <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <FaKey className="text-white text-2xl" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+                    <p className="text-gray-400">Only root users can access user management.</p>
+                </div>
+            </div>
+        );
+    }
+
     useEffect(() => {
         fetchUsers();
     }, []);
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/auth/users`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
+            const response = await axios.get(`${API_BASE_URL}/auth/users`, {
+                withCredentials: true
             });
-
-            if (response.ok) {
-                const data = await response.json();
-                // Filter out root users and set the users directly
-                setUsers(data.users.filter(user => user.role !== 'root'));
-            } else {
-                const errorData = await response.json();
-                setError(errorData.error || 'Failed to fetch users');
-            }
+            setUsers(response.data.users.filter(user => user.role !== 'root'));
         } catch (error) {
+            console.error('Failed to fetch users:', error);
             setError('Failed to fetch users');
         }
     };
@@ -45,26 +50,19 @@ const Users = () => {
         setError("");
 
         try {
-            const response = await fetch(`${API_BASE_URL}/auth/users`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, expiryTime })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                setUsers([data.user, ...users]);
-                setUsername("");
-                setExpiryTime("");
-            } else {
-                setError(data.error || 'Failed to create user');
-            }
+            const response = await axios.post(`${API_BASE_URL}/auth/users`, 
+                    { username, expiryTime }, 
+                    { withCredentials: true }
+                );
+                // Normalize returned user to include `_id` since backend returns `id` for created user
+                const created = response.data.user || {};
+                if (created.id && !created._id) created._id = created.id;
+                setUsers([created, ...users]);
+            setUsername("");
+            setExpiryTime("");
         } catch (error) {
-            setError('Failed to create user');
+            console.error('Failed to create user:', error);
+            setError(error.response?.data?.error || 'Failed to create user');
         } finally {
             setLoading(false);
         }
@@ -79,22 +77,13 @@ const Users = () => {
         if (!window.confirm("Are you sure you want to delete this user?")) return;
 
         try {
-            const response = await fetch(`${API_BASE_URL}/auth/users/${userId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
+            await axios.delete(`${API_BASE_URL}/auth/users/${userId}`, {
+                withCredentials: true
             });
-
-            if (response.ok) {
-                setUsers(users.filter((user) => user._id !== userId));
-            } else {
-                const errorData = await response.json();
-                setError(errorData.error || 'Failed to delete user');
-            }
+            setUsers(users.filter((user) => user._id !== userId));
         } catch (error) {
-            setError('Failed to delete user');
+            console.error('Failed to delete user:', error);
+            setError(error.response?.data?.error || 'Failed to delete user');
         }
     };
 
@@ -141,20 +130,12 @@ const Users = () => {
     };
 
     return (
-        <div className="relative h-full flex flex-col p-6">
-            {UNDER_CONSTRUCTION && (
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/30 backdrop-blur-[1px] text-center text-white px-6">
-                    <h2 className="text-3xl font-semibold mb-2">User Management</h2>
-                    <p className="text-gray-200 max-w-md">This page is currently under development. Existing content is temporarily unavailable.</p>
-                </div>
-            )}
-
-            <div className={`h-full flex flex-col ${UNDER_CONSTRUCTION ? 'pointer-events-none select-none blur-[0.5px]' : ''}`}>
+        <div className="h-full flex flex-col p-6">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-white">User Management</h1>
-                    <p className="text-gray-400 mt-1">Create and manage user accounts with access control</p>
+                    <p className="text-gray-400 mt-1">Create and manage temporary user accounts</p>
                 </div>
                 <div className="flex items-center space-x-2 text-sm text-gray-400">
                     <span>{users.length} users</span>
@@ -177,7 +158,7 @@ const Users = () => {
                         <FaUserPlus className="text-white text-lg" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-semibold text-white">Create New User</h2>
+                        <h2 className="text-xl font-semibold text-white">Create Temporary User</h2>
                         <p className="text-gray-400 text-sm">Add a new user with temporary access</p>
                     </div>
                 </div>
@@ -224,7 +205,7 @@ const Users = () => {
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-semibold text-white flex items-center space-x-2">
                             <FaUsers />
-                            <span>User Accounts</span>
+                            <span>Temporary Users</span>
                         </h2>
                         <div className="flex items-center space-x-2">
                             <span className="text-sm text-gray-400">Show passwords:</span>
@@ -271,7 +252,7 @@ const Users = () => {
                                                 </div>
                                                 <div>
                                                     <p className="text-white font-medium">{user.username}</p>
-                                                    <p className="text-sm text-gray-400">{user.role}</p>
+                                                    <p className="text-sm text-gray-400 capitalize">{user.role}</p>
                                                 </div>
                                             </div>
                                         </td>
@@ -315,15 +296,13 @@ const Users = () => {
                                             <span className="text-gray-400 text-sm">{formatDate(user.createdAt)}</span>
                                         </td>
                                         <td className="p-4 text-right">
-                                            {user.role !== 'root' && (
-                                                <button
-                                                    onClick={() => handleDeleteUser(user._id)}
-                                                    className="p-2 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded-lg transition-colors"
-                                                    title="Delete user"
-                                                >
-                                                    <FaTrashAlt />
-                                                </button>
-                                            )}
+                                            <button
+                                                onClick={() => handleDeleteUser(user._id)}
+                                                className="p-2 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded-lg transition-colors"
+                                                title="Delete user"
+                                            >
+                                                <FaTrashAlt />
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -333,8 +312,8 @@ const Users = () => {
                                             <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
                                                 <FaUsers className="text-gray-400 text-2xl" />
                                             </div>
-                                            <p className="text-gray-400 text-lg">No users created yet</p>
-                                            <p className="text-gray-500 text-sm mt-2">Create your first user account above</p>
+                                            <p className="text-gray-400 text-lg">No temporary users created yet</p>
+                                            <p className="text-gray-500 text-sm mt-2">Create your first temporary user account above</p>
                                         </td>
                                     </tr>
                                 )}
@@ -385,7 +364,6 @@ const Users = () => {
                         </div>
                     </div>
                 </div>
-            </div>
             </div>
         </div>
     );

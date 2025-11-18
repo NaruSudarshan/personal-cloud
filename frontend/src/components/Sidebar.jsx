@@ -1,5 +1,5 @@
 // src/components/Sidebar.jsx
-import { FaCloudUploadAlt, FaFolderOpen, FaUsers, FaHome, FaSearch, FaUser, FaSignOutAlt } from "react-icons/fa";
+import { FaCloudUploadAlt, FaFolderOpen, FaUsers, FaHome, FaUser, FaSignOutAlt } from "react-icons/fa";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -71,38 +71,23 @@ const Sidebar = () => {
           <span className="font-medium">My Files</span>
         </NavLink>
 
-        <NavLink
-          to="/users"
-          className={({ isActive }) =>
-            `flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
-              isActive 
-                ? "bg-gradient-to-r from-primary to-secondary text-white shadow-lg" 
-                : "text-gray-300 hover:bg-gray-800 hover:text-white"
-            }`
-          }
-        >
-          <FaUsers className="text-lg" />
-          <span className="font-medium">Users</span>
-        </NavLink>
+        {/* Only show Users menu for root users */}
+        {user?.role === 'root' && (
+          <NavLink
+            to="/users"
+            className={({ isActive }) =>
+              `flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                isActive 
+                  ? "bg-gradient-to-r from-primary to-secondary text-white shadow-lg" 
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`
+            }
+          >
+            <FaUsers className="text-lg" />
+            <span className="font-medium">Users</span>
+          </NavLink>
+        )}
       </nav>
-
-      {/* AI Search Section
-      <div className="p-4 border-t border-gray-800">
-        <div className="bg-gray-800 rounded-xl p-4">
-          <div className="flex items-center space-x-3 mb-3">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <FaSearch className="text-white text-sm" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-white">AI Search</p>
-              <p className="text-xs text-gray-400">PDF Files Only</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-400 leading-relaxed">
-            Search through your PDF files with natural language queries using AI technology.
-          </p>
-        </div>
-      </div> */}
 
       {/* User Profile & Logout */}
       <div className="p-4 border-t border-gray-800">
@@ -113,7 +98,10 @@ const Sidebar = () => {
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium text-white">{user?.username || 'Guest'}</p>
-              <p className="text-xs text-gray-400">{user?.role === 'root' ? 'Administrator' : 'User'}</p>
+              <p className="text-xs text-gray-400 capitalize">
+                {user?.role === 'root' ? 'Administrator' : 'User'}
+                {user?.email && ` • ${user.email}`}
+              </p>
             </div>
           </div>
           <button 

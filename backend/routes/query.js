@@ -6,7 +6,6 @@ const { HuggingFaceTransformersEmbeddings } = require('@langchain/community/embe
 const File = require('../models/File');
 const Embedding = require('../models/Embedding');
 const { authenticateToken } = require('../middleware/auth');
-const { ensureRootOwnerForGroup, getRootOwnerObjectId } = require('../utils/rootOwnership');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const embeddings = new HuggingFaceTransformersEmbeddings({
@@ -48,12 +47,15 @@ router.post('/', authenticateToken, async (req, res) => {
         const { query } = req.body;
         if (!query) return res.status(400).json({ error: 'Query is required' });
 
-        const ownerObjectId = getRootOwnerObjectId(req);
-        if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+        const rootOwnerId = req.user.rootOwner;
 
-        await ensureRootOwnerForGroup(ownerObjectId);
+        // Build file filter based on user role
+        const fileFilter = { rootOwner: rootOwnerId };
+        // if (req.user.role !== 'root') {
+        //     fileFilter.uploadedBy = req.user._id;
+        // }
 
-        const accessibleFiles = await File.find({ rootOwner: ownerObjectId });
+        const accessibleFiles = await File.find(fileFilter);
         if (!accessibleFiles.length) {
             return res.json({
                 answer: "I couldn't find any information related to your question in your uploaded files.",
@@ -67,14 +69,13 @@ router.post('/', authenticateToken, async (req, res) => {
         const queryVector = await embeddings.embedQuery(query);
 
         // Get relevant chunks scoped to user's files
-        const relevantChunks = await getRelevantChunks(queryVector, fileIds);
+        const relevantChunks = await getRelevantChunks(queryVector, fileIds, rootOwnerId);
         if (!relevantChunks.length) {
             return res.json({
                 answer: "I couldn't find any information related to your question in your uploaded files.",
                 sources: []
             });
         }
-
 
         // Generate answer
         const context = relevantChunks.map(chunk => {
@@ -127,19 +128,26 @@ router.post('/summarize', authenticateToken, async (req, res) => {
         const { fileName, fileId } = req.body;
         if (!fileName && !fileId) return res.status(400).json({ error: 'fileName or fileId is required' });
 
-        const ownerObjectId = getRootOwnerObjectId(req);
-        if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+        const rootOwnerId = req.user.rootOwner;
 
-        await ensureRootOwnerForGroup(ownerObjectId);
-
-        const file = await File.findOne({
+        // Build file filter based on user role
+        const fileFilter = {
             ...(fileId ? { _id: fileId } : { originalName: fileName }),
-            rootOwner: ownerObjectId
-        });
+            rootOwner: rootOwnerId
+        };
+        if (req.user.role !== 'root') {
+            fileFilter.uploadedBy = req.user._id;
+        }
+
+        const file = await File.findOne(fileFilter);
         if (!file) return res.status(404).json({ error: 'File not found' });
 
         const queryVector = await embeddings.embedQuery('Summarize the document');
-        const fileEmbeds = await Embedding.find({ fileId: file._id }).lean();
+        const fileEmbeds = await Embedding.find({ 
+            fileId: file._id,
+            rootOwner: rootOwnerId 
+        }).lean();
+        
         if (!fileEmbeds.length) return res.status(404).json({ error: 'No embeddings found' });
 
         // Get top chunks for summary
@@ -172,7 +180,7 @@ router.post('/summarize', authenticateToken, async (req, res) => {
 });
 
 // Helper function for chunk retrieval
-async function getRelevantChunks(queryVector, fileIds) {
+async function getRelevantChunks(queryVector, fileIds, rootOwnerId) {
     const uniqueIds = [...new Set(fileIds.map(id => id.toString()))].map(id => new mongoose.Types.ObjectId(id));
     if (!uniqueIds.length) return [];
 
@@ -188,7 +196,7 @@ async function getRelevantChunks(queryVector, fileIds) {
                     }
                 }
             },
-            { $match: { fileId: { $in: uniqueIds } } },
+            { $match: { fileId: { $in: uniqueIds }, rootOwner: new mongoose.Types.ObjectId(rootOwnerId) } },
             { $limit: 20 },
             { $project: { score: { $meta: "searchScore" }, fileId: 1, text: 1 } }
         ]);

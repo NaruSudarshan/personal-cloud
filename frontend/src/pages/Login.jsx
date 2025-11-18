@@ -1,23 +1,27 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { FaCloudUploadAlt, FaEye, FaEyeSlash, FaUser, FaLock } from "react-icons/fa";
+import { useNavigate, Link } from "react-router-dom";
+import { FaCloudUploadAlt, FaEye, FaEyeSlash, FaUser, FaLock, FaEnvelope } from "react-icons/fa";
 
 function Login() {
   const [showPassword, setShowPassword] = useState(false);
-  const [username, setUsername] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const result = await login(username, password);
+    const result = await login(identifier, password);
     
-    if (!result.success) {
+    if (result.success) {
+      navigate("/dashboard");
+    } else {
       setError(result.error);
     }
     
@@ -44,17 +48,17 @@ function Login() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Username Field */}
+            {/* Email/Username Field */}
             <div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaUser className="h-5 w-5 text-gray-400" />
+                  <FaEnvelope className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
                   type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Username"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="Email or Username"
                   className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   required
                 />
@@ -100,6 +104,16 @@ function Login() {
             >
               {loading ? "Signing In..." : "Sign In"}
             </button>
+
+            {/* Sign Up Link */}
+            <div className="text-center">
+              <p className="text-gray-400">
+                Don't have an account?{" "}
+                <Link to="/signup" className="text-primary hover:text-secondary transition-colors">
+                  Create one here
+                </Link>
+              </p>
+            </div>
           </form>
         </div>
       </div>

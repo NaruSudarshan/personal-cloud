@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { FaRobot, FaTimes, FaPaperPlane, FaMicrophone, FaSearch, FaFileAlt, FaStar } from "react-icons/fa";
+import { FaRobot, FaTimes, FaPaperPlane, FaFileAlt, FaStar } from "react-icons/fa";
 import axios from "axios";
 
 const ZenoAI = () => {
@@ -47,7 +47,8 @@ const ZenoAI = () => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:5000/api/query', { 
+      // Use relative URL instead of hardcoded localhost
+      const response = await axios.post('/api/query', { 
         query: inputMessage 
       });
 
@@ -86,13 +87,6 @@ const ZenoAI = () => {
   const formatTime = (timestamp) => {
     return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
-
-  // const quickQuestions = [
-  //   "Show me all PDF files",
-  //   "What does the project report say?",
-  //   "Find PDFs about finances",
-  //   "Summarize my documents"
-  // ];
 
   return (
     <>
@@ -205,24 +199,6 @@ const ZenoAI = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Questions
-          {messages.length === 1 && (
-            <div className="p-4 border-t border-gray-800">
-              <p className="text-xs text-gray-400 mb-3">Try asking:</p>
-              <div className="grid grid-cols-2 gap-2">
-                {quickQuestions.map((question, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setInputMessage(question)}
-                    className="text-xs text-gray-300 bg-gray-800 hover:bg-gray-700 p-2 rounded-lg transition-colors text-left"
-                  >
-                    {question}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )} */}
-
           {/* Input */}
           <div className="p-4 border-t border-gray-800">
             <div className="flex items-center space-x-2">
@@ -244,9 +220,6 @@ const ZenoAI = () => {
                   <FaPaperPlane />
                 </button>
               </div>
-              {/* <button className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">
-                <FaMicrophone className="text-gray-400" />
-              </button> */}
             </div>
           </div>
         </div>
@@ -255,4 +228,4 @@ const ZenoAI = () => {
   );
 };
 
-export default ZenoAI; 
+export default ZenoAI;

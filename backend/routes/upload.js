@@ -4,7 +4,6 @@ const crypto = require("crypto");
 const router = express.Router();
 const File = require("../models/File");
 const { authenticateToken } = require("../middleware/auth");
-const { ensureRootOwnerForGroup, getRootOwnerObjectId } = require('../utils/rootOwnership');
 const { processPDFForEmbeddings } = require('../services/embeddingProcessor');
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
@@ -12,7 +11,7 @@ const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Initialize S3 client — credentials and region are taken from env or AWS SDK default chain
+// Initialize S3 client
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET = process.env.S3_BUCKET;
 
@@ -28,12 +27,7 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
     const { originalname, size, mimetype, buffer } = req.file;
     const fileHash = calculateFileHashFromBuffer(buffer);
 
-    const ownerObjectId = getRootOwnerObjectId(req);
-    if (!ownerObjectId) {
-      return res.status(403).json({ error: 'Unable to resolve root owner for upload' });
-    }
-
-    await ensureRootOwnerForGroup(ownerObjectId);
+    const rootOwnerId = req.user.rootOwner;
 
     // S3 key: user prefix + timestamp + original name
     const savedName = `${Date.now()}-${originalname}`;
@@ -49,8 +43,13 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
       ContentType: mimetype
     }));
 
-    // Check if file already exists in DB by original name
-  let existingFile = await File.findOne({ originalName: originalname, rootOwner: ownerObjectId });
+    // Check if a file with the same name already exists under the same rootOwner
+    // (we want uploads by any user under the same root to become new versions)
+    const fileFilter = {
+      originalName: originalname,
+      rootOwner: rootOwnerId
+    };
+    let existingFile = await File.findOne(fileFilter);
 
     if (existingFile) {
       // Push current version into versions array
@@ -59,8 +58,10 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
         savedName: existingFile.savedName,
         size: existingFile.size,
         path: existingFile.path,
+        mimeType: existingFile.mimeType,
         uploadDate: existingFile.uploadDate,
-        fileHash: existingFile.fileHash
+        fileHash: existingFile.fileHash,
+        uploadedBy: existingFile.uploadedBy
       });
 
       // Replace with new version metadata
@@ -71,15 +72,17 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
       existingFile.path = key; // store S3 key here
       existingFile.fileHash = fileHash;
       existingFile.uploadDate = new Date();
-  existingFile.aiProcessed = "pending";
-  existingFile.rootOwner = ownerObjectId;
-  existingFile.uploadedByUser = req.user._id;
+      existingFile.aiProcessed = "pending";
+      existingFile.summary = "";
+      existingFile.extractedText = "";
+      existingFile.rootOwner = rootOwnerId;
+      existingFile.uploadedBy = req.user._id;
 
       await existingFile.save();
 
       if (mimetype === 'application/pdf') {
         console.log(`🔍 Starting AI processing for PDF: ${savedName}`);
-          processPDFForEmbeddings(existingFile._id);
+        processPDFForEmbeddings(existingFile._id, rootOwnerId);
       }
 
       return res.status(200).json({
@@ -106,16 +109,15 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
       summary: "",
       extractedText: "",
       aiProcessed: "pending",
-      uploadedBy: req.user.username,
-      uploadedByUser: req.user._id,
-      rootOwner: ownerObjectId
+      uploadedBy: req.user._id,
+      rootOwner: rootOwnerId
     });
 
     await newFile.save();
 
     if (mimetype === 'application/pdf') {
       console.log(`🔍 Starting AI processing for new PDF: ${savedName}`);
-      processPDFForEmbeddings(newFile._id);
+      processPDFForEmbeddings(newFile._id, rootOwnerId);
     }
 
     res.status(201).json({

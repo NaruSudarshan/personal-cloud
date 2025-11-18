@@ -5,7 +5,6 @@ const File = require("../models/File");
 const { authenticateToken } = require("../middleware/auth");
 const { S3Client, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const Embedding = require('../models/Embedding');
-const { ensureRootOwnerForGroup, getRootOwnerObjectId } = require('../utils/rootOwnership');
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET = process.env.S3_BUCKET;
@@ -13,21 +12,25 @@ const BUCKET = process.env.S3_BUCKET;
 // Get the latest version of each file
 router.get("/", authenticateToken, async (req, res) => {
   try {
-  const ownerObjectId = getRootOwnerObjectId(req);
-  if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+    const rootOwnerId = req.user.rootOwner;
 
-  await ensureRootOwnerForGroup(ownerObjectId);
+    // Build file filter based on user role
+    const fileFilter = { rootOwner: rootOwnerId };
+    // if (req.user.role !== 'root') {
+    //   fileFilter.uploadedBy = req.user._id;
+    // }
 
-  const latestFiles = await File.find({ rootOwner: ownerObjectId }).sort({ uploadDate: -1 });
+    const latestFiles = await File.find(fileFilter)
+      .sort({ uploadDate: -1 })
+      .populate('uploadedBy', 'username name');
 
     const fileData = latestFiles.map(file => ({
       id: file._id,
       name: file.originalName,
-      // Add other relevant fields you want to show in the main list
       size: `${(file.size / 1024).toFixed(1)} KB`,
       uploadedAt: file.uploadDate.toISOString(),
       version: file.version,
-      uploadedBy: file.uploadedBy, // Example of adding new data
+      uploadedBy: file.uploadedBy?.username || 'Unknown',
       aiProcessed: file.aiProcessed || 'pending'
     }));
 
@@ -41,12 +44,20 @@ router.get("/", authenticateToken, async (req, res) => {
 // Get all versions of a specific file
 router.get("/versions/:name", authenticateToken, async (req, res) => {
   try {
-  const ownerObjectId = getRootOwnerObjectId(req);
-  if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
+    const rootOwnerId = req.user.rootOwner;
 
-  await ensureRootOwnerForGroup(ownerObjectId);
+    // Build file filter based on user role
+    const fileFilter = { 
+      originalName: req.params.name,
+      rootOwner: rootOwnerId 
+    };
+    // if (req.user.role !== 'root') {
+    //   fileFilter.uploadedBy = req.user._id;
+    // }
 
-  const file = await File.findOne({ originalName: req.params.name, rootOwner: ownerObjectId });
+    const file = await File.findOne(fileFilter)
+      .populate('uploadedBy', 'username name')
+      .populate('versions.uploadedBy', 'username name');
 
     if (!file) {
       return res.status(404).json({ error: "File not found" });
@@ -59,6 +70,7 @@ router.get("/versions/:name", authenticateToken, async (req, res) => {
       version: file.version,
       size: `${(file.size / 1024).toFixed(1)} KB`,
       uploadedAt: file.uploadDate.toISOString(),
+      uploadedBy: file.uploadedBy?.username || 'Unknown'
     };
 
     // The 'versions' array holds the older versions
@@ -68,6 +80,7 @@ router.get("/versions/:name", authenticateToken, async (req, res) => {
       version: v.versionNumber,
       size: `${(v.size / 1024).toFixed(1)} KB`,
       uploadedAt: v.uploadDate.toISOString(),
+      uploadedBy: v.uploadedBy?.username || 'Unknown'
     })).sort((a, b) => b.version - a.version);
 
     res.json([latestVersion, ...oldVersions]);
@@ -80,22 +93,35 @@ router.get("/versions/:name", authenticateToken, async (req, res) => {
 // Download a specific file version by its unique ID
 router.get("/download/:id", authenticateToken, async (req, res) => {
   try {
-    const ownerObjectId = getRootOwnerObjectId(req);
-    if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
-
-    await ensureRootOwnerForGroup(ownerObjectId);
+    const rootOwnerId = req.user.rootOwner;
 
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ error: "Invalid ID format" });
     }
 
+    // Build file filter based on user role
+    const fileFilter = { 
+      _id: req.params.id, 
+      rootOwner: rootOwnerId 
+    };
+    // if (req.user.role !== 'root') {
+    //   fileFilter.uploadedBy = req.user._id;
+    // }
+
     // First, check if the ID is for a main document (latest version)
-    let file = await File.findOne({ _id: req.params.id, rootOwner: ownerObjectId });
+    let file = await File.findOne(fileFilter);
     let versionData = file;
 
     // If not found, check if it's an ID for a sub-document (older version)
     if (!file) {
-      file = await File.findOne({ "versions._id": req.params.id, rootOwner: ownerObjectId });
+      const versionFilter = { 
+        "versions._id": req.params.id, 
+        rootOwner: rootOwnerId 
+      };
+      // if (req.user.role !== 'root') {
+      //   versionFilter.uploadedBy = req.user._id;
+      // }
+      file = await File.findOne(versionFilter);
       if (file) {
         versionData = file.versions.find(v => v._id.toString() === req.params.id);
       }
@@ -134,19 +160,25 @@ router.get("/download/:id", authenticateToken, async (req, res) => {
   }
 });
 
-
-// Delete a specific file version by its unique ID
+// Delete a specific file version by its unique ID (root only or own files)
 router.delete("/:id", authenticateToken, async (req, res) => {
   try {
-    const ownerObjectId = getRootOwnerObjectId(req);
-    if (!ownerObjectId) return res.status(403).json({ error: 'Unauthorized' });
-
-    await ensureRootOwnerForGroup(ownerObjectId);
+    const rootOwnerId = req.user.rootOwner;
 
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ error: "Invalid ID format" });
     }
-    const fileToDelete = await File.findOne({ _id: req.params.id, rootOwner: ownerObjectId });
+
+    // Build file filter based on user role
+    const fileFilter = { 
+      _id: req.params.id, 
+      rootOwner: rootOwnerId 
+    };
+    // if (req.user.role !== 'root') {
+    //   fileFilter.uploadedBy = req.user._id;
+    // }
+
+    const fileToDelete = await File.findOne(fileFilter);
 
     // CASE 1: The ID is for the LATEST version (the main document)
     if (fileToDelete) {
@@ -203,7 +235,14 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     }
 
     // CASE 2: The ID is for an OLDER version (a sub-document)
-  const parentFile = await File.findOne({ "versions._id": req.params.id, rootOwner: ownerObjectId });
+    const parentFilter = { 
+      "versions._id": req.params.id, 
+      rootOwner: rootOwnerId 
+    };
+    // if (req.user.role !== 'root') {
+    //   parentFilter.uploadedBy = req.user._id;
+    // }
+    const parentFile = await File.findOne(parentFilter);
     if (parentFile) {
       const versionToDelete = parentFile.versions.find(v => v._id.toString() === req.params.id);
       if (!versionToDelete) return res.status(404).json({ error: "Version not found in parent" });
@@ -243,6 +282,5 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Delete failed" });
   }
 });
-
 
 module.exports = router;

@@ -77,16 +77,22 @@
 
 ### Configuration
 
-1.  **Create a `.env` file in the `backend` directory and add the following:**
-    ```env
-    PORT=5000
-    MONGODB_URI=<your_mongodb_uri>
-    DB_NAME=<your_database_name>
-    UPLOAD_DIR=<path_to_upload_directory>
-    JWT_SECRET=<your_jwt_secret>
-    GROQ_API_KEY=<your_groq_api_key>
-    ```
-
+1.  **Create a `.env` file in the `backend` directory (see `backend/.env.example` for the full list):**
+  ```env
+  PORT=5000
+  JWT_SECRET=<jwt_secret>
+  MONGODB_URI=<your_mongodb_uri>
+  DB_NAME=<your_database_name>
+  ROOT_STORAGE_LIMIT_BYTES=<optional_storage_cap_bytes>
+  GROQ_API_KEY=<your_groq_api_key>
+  GROQ_MODEL=llama-3.3-70b-versatile
+  GOOGLE_CLIENT_ID=<oauth_client_id>
+  OAUTH_USER_DURATION_DAYS=365
+  S3_BUCKET=<aws_bucket_name>
+  AWS_REGION=<aws_region>
+  AWS_ACCESS_KEY_ID=<aws_access_key>
+  AWS_SECRET_ACCESS_KEY=<aws_secret_key>
+  ```
 2.  **Create a root user in your MongoDB database.**
 
 ## 🏃‍♂️ Usage

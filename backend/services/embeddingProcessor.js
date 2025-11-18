@@ -4,28 +4,30 @@ const { PDFLoader } = require("@langchain/community/document_loaders/fs/pdf");
 const path = require('path');
 const File = require('../models/File');
 const Embedding = require('../models/Embedding');
-const { pipeline } = require('@xenova/transformers');
 const fs = require('fs');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { pipeline: streamPipeline } = require('stream');
 const { promisify } = require('util');
 const pump = promisify(streamPipeline);
-console.log("Transformers pipeline initialized:", !!pipeline);
 
 // Initialize embeddings model ✅
 const embeddings = new HuggingFaceTransformersEmbeddings({
   modelName: 'Xenova/all-MiniLM-L6-v2',
 });
 
-async function processPDFForEmbeddings(fileId) {
+async function processPDFForEmbeddings(fileId, rootOwnerId) {
   try {
-    console.log(`🏁 Starting embedding processing for file: ${fileId}`);
-    const file = await File.findById(fileId);
+    console.log(`🏁 Starting embedding processing for file: ${fileId} for rootOwner: ${rootOwnerId}`);
+    
+    // Find file with rootOwner check for security
+    const file = await File.findOne({ _id: fileId, rootOwner: rootOwnerId });
     if (!file || file.mimeType !== 'application/pdf') {
-      console.log(`⏩ Skipping non-PDF file: ${fileId}`);
+      console.log(`⏩ Skipping non-PDF or unauthorized file: ${fileId}`);
       return;
     }
+    
     console.log("File found:", !!file);
+    
     // mark processing started
     try {
       file.aiProcessed = 'processing';
@@ -83,9 +85,11 @@ async function processPDFForEmbeddings(fileId) {
     console.log(`🧠 Generated embeddings for ${chunkVectors.length} chunks`);
     console.log("Generated vectors:", chunkVectors.length);
     console.log("Vector dimension:", chunkVectors[0]?.length || 0);
-    // Save each chunk embedding to the database (include versionNumber)
+    
+    // Save each chunk embedding to the database (include versionNumber and rootOwner)
     const embeddingDocs = chunks.map((chunk, index) => ({
       fileId,
+      rootOwner: rootOwnerId, // Add rootOwner for data isolation
       versionNumber: file.version,
       chunkId: `${fileId}_${index}`,
       chunkIndex: index,
@@ -93,7 +97,8 @@ async function processPDFForEmbeddings(fileId) {
       text: chunk.pageContent
     }));
 
-    console.log(`💾 Saving ${embeddingDocs.length} embeddings for file '${file.originalName}' (id=${fileId}, version=${file.version})`);
+    console.log(`💾 Saving ${embeddingDocs.length} embeddings for file '${file.originalName}' (id=${fileId}, version=${file.version}, rootOwner=${rootOwnerId})`);
+    
     // Use allSettled so we can log per-item failures without aborting the whole process
     const savePromises = embeddingDocs.map(d => new Embedding(d).save());
     const results = await Promise.allSettled(savePromises);
@@ -113,12 +118,35 @@ async function processPDFForEmbeddings(fileId) {
     await file.save();
     console.log(`✅ Completed embedding processing for file: ${fileId}`);
 
+    // Clean up local file after processing
+    try {
+      if (fs.existsSync(localFilePath)) {
+        fs.unlinkSync(localFilePath);
+        console.log(`🧹 Cleaned up local file: ${localFilePath}`);
+      }
+    } catch (cleanupError) {
+      console.warn('Could not clean up local file:', cleanupError.message);
+    }
+
   } catch (error) {
     console.error(`❌ Embedding processing failed: ${error}`);
-    const file = await File.findById(fileId);
+    const file = await File.findOne({ _id: fileId, rootOwner: rootOwnerId });
     if (file) {
       file.aiProcessed = "error";
       await file.save();
+    }
+  }
+}
+
+const MAX_RETRIES = 3;
+
+async function processPDFWithRetry(fileId, rootOwnerId, attempt = 1) {
+  try {
+    await processPDFForEmbeddings(fileId, rootOwnerId);
+  } catch (error) {
+    if (attempt <= MAX_RETRIES) {
+      console.log(`🔄 Retrying embedding processing (attempt ${attempt})`);
+      setTimeout(() => processPDFWithRetry(fileId, rootOwnerId, attempt + 1), 5000 * attempt);
     }
   }
 }
@@ -127,16 +155,3 @@ module.exports = {
   processPDFForEmbeddings,
   processPDFWithRetry
 };
-
-const MAX_RETRIES = 3;
-
-async function processPDFWithRetry(fileId, attempt = 1) {
-  try {
-    await processPDFForEmbeddings(fileId);
-  } catch (error) {
-    if (attempt <= MAX_RETRIES) {
-      console.log(`🔄 Retrying embedding processing (attempt ${attempt})`);
-      setTimeout(() => processPDFWithRetry(fileId, attempt + 1), 5000 * attempt);
-    }
-  }
-}
