@@ -81,7 +81,7 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
       await existingFile.save();
 
       if (mimetype === 'application/pdf') {
-        console.log(`🔍 Starting AI processing for PDF: ${savedName}`);
+        // console.log(`🔍 Starting AI processing for PDF: ${savedName}`);
         processPDFForEmbeddings(existingFile._id, rootOwnerId);
       }
 
@@ -116,7 +116,7 @@ router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
     await newFile.save();
 
     if (mimetype === 'application/pdf') {
-      console.log(`🔍 Starting AI processing for new PDF: ${savedName}`);
+      // console.log(`🔍 Starting AI processing for new PDF: ${savedName}`);
       processPDFForEmbeddings(newFile._id, rootOwnerId);
     }
 
