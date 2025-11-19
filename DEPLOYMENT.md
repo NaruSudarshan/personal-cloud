@@ -46,7 +46,8 @@ We will deploy the backend first to get the API URL.
 4.  **Environment Variables**:
     Add the following environment variables in the "Environment" tab:
     *   `MONGODB_URI`: Your MongoDB connection string.
-    *   `JWT_SECRET`: A strong secret key for JWT signing.
+    *   `ACCESS_TOKEN_SECRET`: A strong secret string for signing access tokens (e.g., generated with `openssl rand -base64 32`).
+    *   `REFRESH_TOKEN_SECRET`: A strong secret string for signing refresh tokens.
     *   `AWS_ACCESS_KEY_ID`: Your AWS Access Key ID.
     *   `AWS_SECRET_ACCESS_KEY`: Your AWS Secret Access Key.
     *   `AWS_REGION`: Your AWS Region (e.g., `us-east-1`).
