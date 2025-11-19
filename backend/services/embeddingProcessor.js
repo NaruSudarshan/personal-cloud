@@ -1,6 +1,22 @@
 const { pipeline: streamPipeline } = require('stream');
 const { promisify } = require('util');
 const fs = require('fs');
+const path = require('path');
+const { RecursiveCharacterTextSplitter } = require('langchain/text_splitter');
+const { HuggingFaceTransformersEmbeddings } = require('@langchain/community/embeddings/hf_transformers');
+const { PDFLoader } = require("@langchain/community/document_loaders/fs/pdf");
+const File = require('../models/File');
+const Embedding = require('../models/Embedding');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const os = require('os');
+
+// Initialize embeddings model
+const embeddings = new HuggingFaceTransformersEmbeddings({
+  modelName: 'Xenova/all-MiniLM-L6-v2',
+});
+
+const pump = promisify(streamPipeline);
+
 async function processPDFForEmbeddings(fileId, rootOwnerId) {
   try {
     // console.log(`🏁 Starting embedding processing for file: ${fileId} for rootOwner: ${rootOwnerId}`);
@@ -24,8 +40,9 @@ async function processPDFForEmbeddings(fileId, rootOwnerId) {
     }
 
     // PDFLoader expects a local path. If file.path points to an S3 key, download it to uploads/ and use that path.
-    const uploadsDir = path.join(__dirname, '../uploads');
-    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+    // Use os.tmpdir() for serverless compatibility
+    const uploadsDir = path.join(os.tmpdir(), 'uploads');
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
     const localFilePath = path.join(uploadsDir, file.savedName);
 
