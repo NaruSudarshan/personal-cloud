@@ -17,7 +17,7 @@ const authenticateToken = async (req, res, next) => {
     // Verify access token
     const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
     const user = await User.findById(decoded.userId);
-    
+
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
@@ -108,16 +108,16 @@ const setTokenCookies = (res, accessToken, refreshToken) => {
   // Set access token cookie (15 minutes)
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: true, // Always true for SameSite=None
+    sameSite: 'none', // Required for cross-site (Vercel -> Render)
     maxAge: 15 * 60 * 1000
   });
 
   // Set refresh token cookie (7 days)
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: true, // Always true for SameSite=None
+    sameSite: 'none', // Required for cross-site (Vercel -> Render)
     maxAge: 7 * 24 * 60 * 60 * 1000
   });
 };
@@ -132,11 +132,11 @@ const clearTokenCookies = (res) => {
 const optionalAuth = async (req, res, next) => {
   try {
     const token = req.cookies.accessToken;
-    
+
     if (token) {
       const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
       const user = await User.findById(decoded.userId);
-      
+
       if (user && user.canAccess()) {
         req.user = user;
         req.rootOwnerId = user.rootOwner;
