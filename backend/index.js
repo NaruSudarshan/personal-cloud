@@ -51,7 +51,7 @@ app.use((req, res, next) => {
 
 // Use CORS for all routes and explicitly handle preflight
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // handle preflight for all routes
+app.options("(.*)", cors(corsOptions)); // handle preflight for all routes
 
 // 2. Enable Express to parse JSON request bodies
 app.use(express.json());
