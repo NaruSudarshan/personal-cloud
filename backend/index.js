@@ -21,10 +21,37 @@ if (!MONGODB_URI) {
 // --- Global Middleware ---
 // IMPORTANT: Middleware must be defined BEFORE the routes that use them.
 // 1. Enable CORS for all routes
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
-}));
+// 1. Enable CORS for allowed origins (supports multiple origins via ALLOWED_ORIGINS)
+const rawAllowed = process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:3000';
+// ALLOWED_ORIGINS expected as comma-separated list, e.g.
+// ALLOWED_ORIGINS=https://one-vault-eight.vercel.app,https://onevault.narusudarshan.com
+const allowedOrigins = rawAllowed.split(",").map(s => s.trim()).filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // allow requests with no origin (e.g. curl, mobile apps, server-to-server)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // otherwise block
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  credentials: true,
+  optionsSuccessStatus: 204, // some browsers need 204 for preflight
+};
+
+// Add Vary header so caches handle different origins correctly
+app.use((req, res, next) => {
+  res.setHeader("Vary", "Origin");
+  next();
+});
+
+// Use CORS for all routes and explicitly handle preflight
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // handle preflight for all routes
 
 // 2. Enable Express to parse JSON request bodies
 app.use(express.json());
