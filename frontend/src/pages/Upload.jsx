@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
-import { FaCloudUploadAlt, FaFileAlt, FaTimes, FaCheck, FaSpinner } from "react-icons/fa";
-import axios from 'axios';
+import { FaCloudUploadAlt, FaTimes, FaCheck, FaSpinner } from "react-icons/fa";
+import api from '../lib/api';
 
 const Upload = () => {
   const { user } = useAuth();
@@ -33,7 +33,7 @@ const Upload = () => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       setSelectedFile(e.dataTransfer.files[0]);
       setMessage("");
@@ -45,12 +45,12 @@ const Upload = () => {
 
     setUploading(true);
     setMessage("");
-    
+
     const formData = new FormData();
     formData.append("file", selectedFile);
 
     try {
-      const response = await axios.post('/api/upload', formData, {
+      const response = await api.post('/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -126,11 +126,10 @@ const Upload = () => {
         <div className="max-w-2xl w-full">
           {/* Drag & Drop Zone */}
           <div
-            className={`relative border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 ${
-              dragActive 
-                ? "border-primary bg-primary/10" 
-                : "border-gray-600 hover:border-gray-500"
-            }`}
+            className={`relative border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 ${dragActive
+              ? "border-primary bg-primary/10"
+              : "border-gray-600 hover:border-gray-500"
+              }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
@@ -143,12 +142,12 @@ const Upload = () => {
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               accept="*/*"
             />
-            
+
             <div className="space-y-4">
               <div className="w-20 h-20 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center mx-auto">
                 <FaCloudUploadAlt className="text-white text-3xl" />
               </div>
-              
+
               <div>
                 <h3 className="text-xl font-semibold text-white mb-2">
                   {dragActive ? "Drop your file here" : "Upload your files"}
@@ -192,11 +191,10 @@ const Upload = () => {
               <button
                 onClick={handleUpload}
                 disabled={uploading}
-                className={`flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white font-semibold rounded-lg transition-all duration-200 ${
-                  uploading 
-                    ? "opacity-50 cursor-not-allowed" 
-                    : "hover:shadow-lg hover:scale-105"
-                }`}
+                className={`flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white font-semibold rounded-lg transition-all duration-200 ${uploading
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:shadow-lg hover:scale-105"
+                  }`}
               >
                 {uploading ? (
                   <>
@@ -210,7 +208,7 @@ const Upload = () => {
                   </>
                 )}
               </button>
-              
+
               <button
                 onClick={removeFile}
                 className="px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
@@ -222,11 +220,10 @@ const Upload = () => {
 
           {/* Status Message */}
           {message && (
-            <div className={`mt-4 p-4 rounded-lg border ${
-              message.includes('✅') 
-                ? 'bg-green-900/20 border-green-700 text-green-400' 
-                : 'bg-red-900/20 border-red-700 text-red-400'
-            }`}>
+            <div className={`mt-4 p-4 rounded-lg border ${message.includes('✅')
+              ? 'bg-green-900/20 border-green-700 text-green-400'
+              : 'bg-red-900/20 border-red-700 text-red-400'
+              }`}>
               <p className="font-medium">{message}</p>
             </div>
           )}

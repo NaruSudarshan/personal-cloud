@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { FaRobot, FaTimes, FaPaperPlane, FaFileAlt, FaStar } from "react-icons/fa";
-import axios from "axios";
+import api from "../lib/api";
 
 const ZenoAI = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -47,9 +47,8 @@ const ZenoAI = () => {
     setIsLoading(true);
 
     try {
-      // Use relative URL instead of hardcoded localhost
-      const response = await axios.post('/api/query', { 
-        query: inputMessage 
+      const response = await api.post('/query', {
+        query: inputMessage
       });
 
       const aiMessage = {
@@ -93,9 +92,8 @@ const ZenoAI = () => {
       {/* Floating Zeno Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-full shadow-2xl hover:shadow-3xl transition-all duration-300 z-50 flex items-center justify-center group ${
-          isOpen ? 'scale-90' : 'hover:scale-110'
-        }`}
+        className={`fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-full shadow-2xl hover:shadow-3xl transition-all duration-300 z-50 flex items-center justify-center group ${isOpen ? 'scale-90' : 'hover:scale-110'
+          }`}
       >
         <FaRobot className="text-white text-2xl" />
         {!isOpen && (
@@ -138,16 +136,15 @@ const ZenoAI = () => {
                 className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] p-3 rounded-2xl ${
-                    message.type === 'user'
+                  className={`max-w-[80%] p-3 rounded-2xl ${message.type === 'user'
                       ? 'bg-gradient-to-r from-primary to-secondary text-white'
                       : message.isError
-                      ? 'bg-red-900/20 border border-red-700 text-red-400'
-                      : 'bg-gray-800 text-white'
-                  }`}
+                        ? 'bg-red-900/20 border border-red-700 text-red-400'
+                        : 'bg-gray-800 text-white'
+                    }`}
                 >
                   <p className="text-sm leading-relaxed">{message.content}</p>
-                  
+
                   {/* Sources for AI messages */}
                   {message.sources && message.sources.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-700">
@@ -165,8 +162,8 @@ const ZenoAI = () => {
                             </div>
                             <div className="flex items-center space-x-1">
                               <div className="w-8 bg-gray-600 rounded-full h-1">
-                                <div 
-                                  className="bg-primary h-1 rounded-full" 
+                                <div
+                                  className="bg-primary h-1 rounded-full"
                                   style={{ width: `${Math.min(100, source.score * 100)}%` }}
                                 ></div>
                               </div>
@@ -177,14 +174,14 @@ const ZenoAI = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   <p className="text-xs text-gray-400 mt-2">
                     {formatTime(message.timestamp)}
                   </p>
                 </div>
               </div>
             ))}
-            
+
             {isLoading && (
               <div className="flex justify-start">
                 <div className="bg-gray-800 text-white p-3 rounded-2xl">
@@ -195,7 +192,7 @@ const ZenoAI = () => {
                 </div>
               </div>
             )}
-            
+
             <div ref={messagesEndRef} />
           </div>
 

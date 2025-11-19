@@ -95,6 +95,57 @@ Open the app in your browser at `http://localhost:5173`.
 
 ---
 
+## Project Structure
+
+```
+personal-cloud/
+├── backend/                 # Node.js + Express Backend
+│   ├── middleware/          # Auth and other middleware
+│   ├── models/              # Mongoose models (User, File, Embedding)
+│   ├── routes/              # API routes
+│   ├── services/            # Business logic (AI processing, S3)
+│   └── index.js             # Entry point
+├── frontend/                # React + Vite Frontend
+│   ├── src/
+│   │   ├── components/      # Reusable UI components
+│   │   ├── context/         # React Context (Auth)
+│   │   ├── pages/           # Page components
+│   │   └── main.jsx         # Entry point
+└── README.md
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+1.  **MongoDB Connection Error**:
+    *   Ensure `MONGODB_URI` in `backend/.env` is correct.
+    *   Check if your IP is whitelisted in MongoDB Atlas.
+
+2.  **S3 Upload Failed**:
+    *   Verify `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, and `S3_BUCKET`.
+    *   Ensure the bucket exists and the user has `PutObject` permissions.
+
+3.  **AI Processing Stuck**:
+    *   Check backend logs for errors in `embeddingProcessor.js`.
+    *   Ensure you have a stable internet connection for downloading models (first run).
+
+---
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1.  Fork the repository.
+2.  Create a new branch (`git checkout -b feature/YourFeature`).
+3.  Commit your changes (`git commit -m 'Add some feature'`).
+4.  Push to the branch (`git push origin feature/YourFeature`).
+5.  Open a Pull Request.
+
+---
+
 ## Notes & Operational Guidance
 
 - The backend returns generated temporary user passwords only once at creation. Keep a copy immediately — the password is not stored in plaintext and will not be returned again.

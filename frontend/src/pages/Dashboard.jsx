@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { FaFileAlt, FaUsers, FaRobot, FaDatabase, FaChartPie } from 'react-icons/fa';
-import axios from 'axios';
+import api from '../lib/api';
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
@@ -40,14 +40,14 @@ const Dashboard = () => {
     return {
       ...defaultDashboardData,
       ...safeData,
-    stats: {
-      ...defaultDashboardData.stats,
+      stats: {
+        ...defaultDashboardData.stats,
         ...safeData.stats,
-      aiProcessing: {
-        ...defaultDashboardData.stats.aiProcessing,
+        aiProcessing: {
+          ...defaultDashboardData.stats.aiProcessing,
           ...(safeData.stats?.aiProcessing || {})
-      }
-    },
+        }
+      },
       storageUsage: typeof safeData.storageUsage === 'number'
         ? Math.max(0, Math.min(100, safeData.storageUsage))
         : defaultDashboardData.storageUsage
@@ -56,7 +56,7 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const response = await axios.get('/api/dashboard/stats');
+      const response = await api.get('/dashboard/stats');
       setDashboardData(normalizeDashboardData(response.data));
       setError('');
     } catch (err) {

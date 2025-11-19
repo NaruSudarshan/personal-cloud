@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { FaUserPlus, FaTrashAlt, FaCopy, FaEye, FaEyeSlash, FaUsers, FaCalendarAlt, FaKey } from "react-icons/fa";
-import axios from "axios";
+import api from "../lib/api";
 
 const Users = () => {
-    const { user, API_BASE_URL } = useAuth();
+    const { user } = useAuth();
     const [users, setUsers] = useState([]);
     const [username, setUsername] = useState("");
     const [expiryTime, setExpiryTime] = useState("");
@@ -33,9 +33,7 @@ const Users = () => {
 
     const fetchUsers = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/auth/users`, {
-                withCredentials: true
-            });
+            const response = await api.get('/auth/users');
             setUsers(response.data.users.filter(user => user.role !== 'root'));
         } catch (error) {
             console.error('Failed to fetch users:', error);
@@ -50,14 +48,11 @@ const Users = () => {
         setError("");
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/auth/users`, 
-                    { username, expiryTime }, 
-                    { withCredentials: true }
-                );
-                // Normalize returned user to include `_id` since backend returns `id` for created user
-                const created = response.data.user || {};
-                if (created.id && !created._id) created._id = created.id;
-                setUsers([created, ...users]);
+            const response = await api.post('/auth/users', { username, expiryTime });
+            // Normalize returned user to include `_id` since backend returns `id` for created user
+            const created = response.data.user || {};
+            if (created.id && !created._id) created._id = created.id;
+            setUsers([created, ...users]);
             setUsername("");
             setExpiryTime("");
         } catch (error) {
@@ -77,9 +72,7 @@ const Users = () => {
         if (!window.confirm("Are you sure you want to delete this user?")) return;
 
         try {
-            await axios.delete(`${API_BASE_URL}/auth/users/${userId}`, {
-                withCredentials: true
-            });
+            await api.delete(`/auth/users/${userId}`);
             setUsers(users.filter((user) => user._id !== userId));
         } catch (error) {
             console.error('Failed to delete user:', error);
@@ -137,11 +130,6 @@ const Users = () => {
                     <h1 className="text-3xl font-bold text-white">User Management</h1>
                     <p className="text-gray-400 mt-1">Create and manage temporary user accounts</p>
                 </div>
-                {/* <div className="flex items-center space-x-2 text-sm text-gray-400">
-                    <span>{users.length} users</span>
-                    <span>•</span>
-                    <span>{users.filter(u => u.isActive && !isExpired(u.expiryTime)).length} active</span>
-                </div> */}
             </div>
 
             {/* Error Message */}
