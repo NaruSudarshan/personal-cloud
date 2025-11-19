@@ -45,14 +45,23 @@ We will deploy the backend first to get the API URL.
     *   **Instance Type**: Free
 4.  **Environment Variables**:
     Add the following environment variables in the "Environment" tab:
+    **Required:**
     *   `MONGODB_URI`: Your MongoDB connection string.
-    *   `ACCESS_TOKEN_SECRET`: A strong secret string for signing access tokens (e.g., generated with `openssl rand -base64 32`).
-    *   `REFRESH_TOKEN_SECRET`: A strong secret string for signing refresh tokens.
-    *   `AWS_ACCESS_KEY_ID`: Your AWS Access Key ID.
-    *   `AWS_SECRET_ACCESS_KEY`: Your AWS Secret Access Key.
-    *   `AWS_REGION`: Your AWS Region (e.g., `us-east-1`).
-    *   `S3_BUCKET`: Your S3 Bucket name.
-    *   `FRONTEND_URL`: The URL of your Vercel frontend (you can add this later after deploying the frontend, or use `*` temporarily).
+    *   `ACCESS_TOKEN_SECRET`: Strong secret for access tokens (e.g., `openssl rand -base64 32`).
+    *   `REFRESH_TOKEN_SECRET`: Strong secret for refresh tokens.
+    *   `AWS_ACCESS_KEY_ID`: AWS Access Key ID.
+    *   `AWS_SECRET_ACCESS_KEY`: AWS Secret Access Key.
+    *   `AWS_REGION`: AWS Region (e.g., `us-east-1`).
+    *   `S3_BUCKET`: S3 Bucket name.
+    *   `GROQ_API_KEY`: Groq API Key.
+    *   `FRONTEND_URL`: URL of your Vercel frontend (use `*` temporarily if unknown).
+
+    **Optional (Defaults available):**
+    *   `GROQ_MODEL`: AI model to use (Default: `llama-3.3-70b-versatile`).
+    *   `ROOT_STORAGE_LIMIT_BYTES`: Storage limit in bytes (Default: 20GB).
+    *   `ACCESS_TOKEN_EXPIRY`: Access token duration (Default: `15m`).
+    *   `REFRESH_TOKEN_EXPIRY`: Refresh token duration (Default: `7d`).
+    *   `NODE_ENV`: Set to `production` (Render usually does this automatically).
 5.  **Deploy**: Click "Create Web Service".
 6.  **Copy URL**: Once deployed, copy the backend URL (e.g., `https://personal-cloud-backend.onrender.com`).
 
