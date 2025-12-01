@@ -1,6 +1,7 @@
 # OneVault
 
 A modern, self-hosted file storage and search app with AI-powered document search and versioning.
+📌 **Live Demo:** https://onevault.narusudarshan.com
 
 This repository contains a React + Vite frontend and an Express + MongoDB backend. The app supports role-based users (root/admin and regular temporary users), file uploads with versioning, AI processing for PDFs (embeddings & search), and S3-compatible storage for file objects.
 
@@ -153,3 +154,4 @@ Contributions are welcome! Please follow these steps:
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
